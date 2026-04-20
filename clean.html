@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ADAM - v24 Clean</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; overflow: hidden; }
+        body {
+            background-color: #12131a;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .undo-button {
+            background: rgba(40, 42, 54, 0.6);
+            border: 1px solid rgba(180, 180, 190, 0.3);
+            border-radius: 8px;
+            color: rgba(180, 180, 190, 0.7);
+            font-size: 12px;
+            font-weight: 500;
+            padding: 8px 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .undo-button:hover {
+            background: rgba(50, 52, 64, 0.8);
+            border-color: rgba(180, 180, 190, 0.5);
+            color: rgba(220, 220, 230, 0.9);
+        }
+        
+        .undo-button:active {
+            transform: scale(0.95);
+        }
+        
+        .undo-button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            transform: scale(1);
+        }
+        
+        /* ========== GRILLE AVEC MASKING ========== */
+        .grid-wrapper {
+            position: relative;
+            --cell: min(80px, 18vw);
+            --gap: 10px;
+            width: calc(4 * var(--cell) + 3 * var(--gap));
+            height: calc(5 * var(--cell) + 4 * var(--gap));
+            overflow: hidden; /* LE MASQUE MAGIQUE */
+        }
+        
+        .grid-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .square {
+            width: var(--cell);
+            height: var(--cell);
+            background-color: #12131a;
+            border: 1px solid rgba(180, 180, 190, 0.35);
+            border-radius: 14px;
+            position: absolute;
+            overflow: hidden;
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+        }
+        
+        .square:hover {
+            border-color: rgba(180, 180, 190, 0.55);
+        }
+        
+        .square:active {
+            cursor: grabbing;
+        }
+        
+        .square.empty {
+            cursor: default;
+            border: 1px dashed rgba(180, 180, 190, 0.15);
+            border-radius: 14px;
+            background-color: #12131a;
+        }
+        
+        .square.white-border {
+            cursor: grab;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 14px;
+            background-color: #12131a;
+        }
+        
+        .square.ghost {
+            pointer-events: none;
+            opacity: 0.9;
+        }
+        
+        @keyframes fusionPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        
+        .fusion-animation {
+            animation: fusionPulse 0.4s ease-in-out;
+        }
+        
+        .square svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        svg .separator {
+            stroke: rgba(180, 180, 190, 0.3);
+            stroke-width: 1;
+        }
+        
+        svg line.icon,
+        svg path.icon,
+        svg circle.icon,
+        svg rect.icon {
+            stroke: rgba(180, 180, 190, 0.35);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+        }
+        
+        svg circle.point {
+            fill: rgba(180, 180, 190, 0.35);
+        }
+        
+        /* === ÉTATS PAR FACE INDIVIDUELLE === */
+        
+        /* Face1 states */
+        .face1-white line.icon, .face1-white path.icon, 
+        .face1-white circle.icon, .face1-white rect.icon {
+            stroke: rgba(180, 180, 190, 0.35);
+        }
+        .face1-white circle.point {
+            fill: rgba(180, 180, 190, 0.35);
+        }
+        
+        .face1-silver line.icon, .face1-silver path.icon, 
+        .face1-silver circle.icon, .face1-silver rect.icon {
+            stroke: #22d3ee;
+            filter: drop-shadow(0 0 2px rgba(34, 211, 238, 0.4));
+        }
+        .face1-silver circle.point {
+            fill: #22d3ee;
+            filter: drop-shadow(0 0 2px rgba(34, 211, 238, 0.4));
+        }
+        
+        .face1-gold line.icon, .face1-gold path.icon, 
+        .face1-gold circle.icon, .face1-gold rect.icon {
+            stroke: #ffd700;
+            filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
+        }
+        .face1-gold circle.point {
+            fill: #ffd700;
+            filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
+        }
+        
+        .face1-emerald line.icon, .face1-emerald path.icon, 
+        .face1-emerald circle.icon, .face1-emerald rect.icon {
+            stroke: #34d399;
+            filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.9));
+        }
+        .face1-emerald circle.point {
+            fill: #34d399;
+            filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.9));
+        }
+        
+        .face1-cosmic line.icon, .face1-cosmic path.icon, 
+        .face1-cosmic circle.icon, .face1-cosmic rect.icon {
+            stroke: #c4b5fd;
+            filter: drop-shadow(0 0 8px rgba(131, 56, 236, 0.9));
+        }
+        .face1-cosmic circle.point {
+            fill: #c4b5fd;
+            filter: drop-shadow(0 0 8px rgba(131, 56, 236, 0.9));
+        }
+        
+        /* Face2 states */
+        .face2-white line.icon, .face2-white path.icon, 
+        .face2-white circle.icon, .face2-white rect.icon {
+            stroke: rgba(180, 180, 190, 0.35);
+        }
+        .face2-white circle.point {
+            fill: rgba(180, 180, 190, 0.35);
+        }
+        
+        .face2-silver line.icon, .face2-silver path.icon, 
+        .face2-silver circle.icon, .face2-silver rect.icon {
+            stroke: #22d3ee;
+            filter: drop-shadow(0 0 2px rgba(34, 211, 238, 0.4));
+        }
+        .face2-silver circle.point {
+            fill: #22d3ee;
+            filter: drop-shadow(0 0 2px rgba(34, 211, 238, 0.4));
+        }
+        
+        .face2-gold line.icon, .face2-gold path.icon, 
+        .face2-gold circle.icon, .face2-gold rect.icon {
+            stroke: #ffd700;
+            filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
+        }
+        .face2-gold circle.point {
+            fill: #ffd700;
+            filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
+        }
+        
+        .face2-emerald line.icon, .face2-emerald path.icon, 
+        .face2-emerald circle.icon, .face2-emerald rect.icon {
+            stroke: #34d399;
+            filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.9));
+        }
+        .face2-emerald circle.point {
+            fill: #34d399;
+            filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.9));
+        }
+        
+        .face2-cosmic line.icon, .face2-cosmic path.icon, 
+        .face2-cosmic circle.icon, .face2-cosmic rect.icon {
+            stroke: #c4b5fd;
+            filter: drop-shadow(0 0 8px rgba(131, 56, 236, 0.9));
+        }
+        .face2-cosmic circle.point {
+            fill: #c4b5fd;
+            filter: drop-shadow(0 0 8px rgba(131, 56, 236, 0.9));
+        }
+        
+        /* Face supernovae */
+        .face1-supernovae line.icon, .face1-supernovae path.icon, 
+        .face1-supernovae circle.icon, .face1-supernovae rect.icon {
+            stroke: #ffeb3b;
+            filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.7)) drop-shadow(0 0 10px rgba(255, 140, 0, 0.4));
+            animation: supernovaIconShift 2.5s ease-in-out infinite;
+        }
+        .face1-supernovae circle.point {
+            fill: #ffeb3b;
+            filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.7));
+            animation: supernovaPointPulse 1.2s ease-in-out infinite;
+        }
+        .face2-supernovae line.icon, .face2-supernovae path.icon, 
+        .face2-supernovae circle.icon, .face2-supernovae rect.icon {
+            stroke: #ffeb3b;
+            filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.7)) drop-shadow(0 0 10px rgba(255, 140, 0, 0.4));
+            animation: supernovaIconShift 2.5s ease-in-out infinite;
+        }
+        .face2-supernovae circle.point {
+            fill: #ffeb3b;
+            filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.7));
+            animation: supernovaPointPulse 1.2s ease-in-out infinite;
+        }
+        
+        /* === HALOS PAR ÉTAT === */
+        .square.white svg .separator { stroke: rgba(180, 180, 190, 0.3); }
+        .square.silver svg .separator { stroke: rgba(34, 211, 238, 0.4); }
+        .square.gold svg .separator { stroke: rgba(255, 215, 0, 0.4); }
+        .square.emerald svg .separator { stroke: rgba(52, 211, 153, 0.6); }
+        .square.cosmic svg .separator { stroke: rgba(196, 181, 253, 0.6); }
+        .square.supernovae svg .separator { stroke: rgba(255, 235, 59, 0.6); }
+        
+        @keyframes supernovaIconShift { 
+            0%, 100% { stroke: #ffeb3b; } 
+            25% { stroke: #ff8c00; } 
+            50% { stroke: #ffd700; } 
+            75% { stroke: #ff6347; } 
+        }
+        @keyframes supernovaPointPulse { 
+            0%, 100% { fill: #ffeb3b; } 
+            33% { fill: #ff8c00; } 
+            66% { fill: #ffd700; } 
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-wrapper">
+        <div class="grid-container" id="gridContainer"></div>
+    </div>
+    <button class="undo-button" id="undoBtn">Undo</button>
+
+    <script>
+        // ============================================
+        // ADAM v24 - SLIDE CONTROLS
+        // ============================================
+        // Commandes:
+        // - Drag horizontal → Glisse toute la LIGNE (wrap-around)
+        // - Drag vertical → Glisse toute la COLONNE (wrap-around)
+        // - Clic simple → Rotation 90° du domino
+        // ============================================
+        
+        const COLS = 4;
+        const ROWS = 5;
+        const TOTAL = 20;
+        const STATE_ORDER = ['white', 'silver', 'gold', 'emerald', 'cosmic', 'supernovae'];
+        
+        // Dimensions calculées dynamiquement
+        let CELL_SIZE = 80;
+        let CELL_GAP = 10;
+        let CELL_TOTAL = 90;
+        let GRID_WIDTH = COLS * CELL_TOTAL;
+        let GRID_HEIGHT = ROWS * CELL_TOTAL;
+        
+        function updateDimensions() {
+            const wrapper = document.querySelector('.grid-wrapper');
+            const style = getComputedStyle(wrapper);
+            const cellValue = style.getPropertyValue('--cell').trim();
+            const gapValue = style.getPropertyValue('--gap').trim();
+            
+            // Parser les valeurs (peuvent être en px ou calculées)
+            if (cellValue) {
+                // Créer un élément temporaire pour mesurer la vraie taille
+                const testEl = document.createElement('div');
+                testEl.style.width = 'var(--cell)';
+                testEl.style.position = 'absolute';
+                testEl.style.visibility = 'hidden';
+                wrapper.appendChild(testEl);
+                CELL_SIZE = testEl.offsetWidth || 80;
+                wrapper.removeChild(testEl);
+            }
+            
+            CELL_GAP = parseFloat(gapValue) || 8;
+            CELL_TOTAL = CELL_SIZE + CELL_GAP;
+            GRID_WIDTH = COLS * CELL_TOTAL;
+            GRID_HEIGHT = ROWS * CELL_TOTAL;
+            
+            console.log('Dimensions:', CELL_SIZE, CELL_GAP, CELL_TOTAL);
+        }
+        
+        const container = document.getElementById('gridContainer');
+        const undoBtn = document.getElementById('undoBtn');
+        
+        let dominos = [];
+        let dominoElements = [];
+        let ghostElements = [];
+        let history = [];
+        const MAX_HISTORY = 20;
+        let lastMovedIndices = [];
+        
+        // État du drag
+        let isDragging = false;
+        let dragAxis = null;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let dragStartTime = 0;
+        let dragRow = -1;
+        let dragCol = -1;
+        let dragOffset = 0;
+        let initialPositions = [];
+        let clickedDominoIdx = null;
+        let clickLocalX = 0; // Position X du clic relative au domino
+        let isAnimating = false;
+        
+        // Icônes
+        const ICONS = {
+            chevron: { f1: 'M20 32L45 12L70 32', f2: 'M20 12L45 32L70 12', t: 'path' },
+            circle: { f1: '45,22,12', f2: '45,22,12', t: 'circle' },
+            twoCircles: { f1: '30,22,8|60,22,8', f2: '30,22,8|60,22,8', t: 'circles' },
+            line: { f1: '15,22,75,22', f2: '15,22,75,22', t: 'line' },
+            threeLines: { f1: '25,10,25,34|45,10,45,34|65,10,65,34', f2: '25,10,25,34|45,10,45,34|65,10,65,34', t: 'lines' },
+            twoPoints: { f1: '30,22,4|60,22,4', f2: '30,22,4|60,22,4', t: 'points' },
+            square: { f1: '25,10,40,24,3', f2: '25,10,40,24,3', t: 'rect' },
+            wave: { f1: 'M10 22Q28 6 45 22Q62 38 80 22', f2: 'M10 22Q28 6 45 22Q62 38 80 22', t: 'path' }
+        };
+        
+        function seededRandom(seed) {
+            let state = seed;
+            return function() {
+                state = (state * 1103515245 + 12345) & 0x7fffffff;
+                return state / 0x7fffffff;
+            };
+        }
+        
+        function initDominos() {
+            dominos = [];
+            
+            // 4 symboles × 10 = 40 symboles pour 20 dominos
+            const symbols = [
+                'threeLines', 'threeLines', 'threeLines', 'threeLines', 'threeLines', 'threeLines', 'threeLines', 'threeLines', 'threeLines', 'threeLines',
+                'square', 'square', 'square', 'square', 'square', 'square', 'square', 'square', 'square', 'square',
+                'circle', 'circle', 'circle', 'circle', 'circle', 'circle', 'circle', 'circle', 'circle', 'circle',
+                'chevron', 'chevron', 'chevron', 'chevron', 'chevron', 'chevron', 'chevron', 'chevron', 'chevron', 'chevron'
+            ];
+            
+            const rng = seededRandom(20480);
+            for (let i = symbols.length - 1; i > 0; i--) {
+                const j = Math.floor(rng() * (i + 1));
+                [symbols[i], symbols[j]] = [symbols[j], symbols[i]];
+            }
+            
+            for (let i = 0; i < TOTAL; i++) {
+                const x = i % COLS;
+                const y = Math.floor(i / COLS);
+                dominos.push({
+                    face1: symbols[i * 2],
+                    face2: symbols[i * 2 + 1],
+                    face1State: 'white',
+                    face2State: 'white',
+                    rotation: ((x + y) % 2 === 0) ? 0 : 90,
+                    state: 'white',
+                    type: 'double'
+                });
+            }
+        }
+        
+        function renderIcon(icon, isFace2, faceState) {
+            if (icon === 'empty') return '';
+            const d = ICONS[icon];
+            if (!d) return '';
+            const data = isFace2 ? d.f2 : d.f1;
+            const faceClass = isFace2 ? 'face2' : 'face1';
+            const stateClass = `${faceClass}-${faceState}`;
+            
+            if (d.t === 'path') return `<path class="icon ${stateClass}" d="${data}"/>`;
+            if (d.t === 'circle') {
+                const [cx, cy, r] = data.split(',');
+                return `<circle class="icon ${stateClass}" cx="${cx}" cy="${cy}" r="${r}"/>`;
+            }
+            if (d.t === 'line') {
+                const [x1, y1, x2, y2] = data.split(',');
+                return `<line class="icon ${stateClass}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+            }
+            if (d.t === 'rect') {
+                const [x, y, w, h, rx] = data.split(',');
+                return `<rect class="icon ${stateClass}" x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}"/>`;
+            }
+            if (d.t === 'lines') {
+                return data.split('|').map(p => {
+                    const [x1, y1, x2, y2] = p.split(',');
+                    return `<line class="icon ${stateClass}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+                }).join('');
+            }
+            return data.split('|').map(p => {
+                const v = p.split(',');
+                return (d.t === 'circles' || d.t === 'points')
+                    ? `<circle class="${d.t === 'points' ? 'point' : 'icon'} ${stateClass}" cx="${v[0]}" cy="${v[1]}" r="${v[2]}"/>`
+                    : `<line class="icon ${stateClass}" x1="${v[0]}" y1="${v[1]}" x2="${v[2]}" y2="${v[3]}"/>`;
+            }).join('');
+        }
+        
+        function renderDominoSVG(d) {
+            if (d.type === 'unique') {
+                return `<svg viewBox="0 0 90 90">
+                    <g class="face1-${d.face1State}" transform="translate(0,22.5)">${renderIcon(d.face1, false, d.face1State)}</g>
+                </svg>`;
+            }
+            
+            const medianeColors = {
+                white: 'rgba(180, 180, 190, 0.35)',
+                silver: 'rgba(6, 182, 212, 0.6)',
+                gold: 'rgba(255, 215, 0, 0.7)',
+                emerald: 'rgba(52, 211, 153, 0.9)',
+                cosmic: 'rgba(196, 181, 253, 0.8)',
+                supernovae: 'rgba(255, 235, 59, 0.8)'
+            };
+            
+            const idx1 = STATE_ORDER.indexOf(d.face1State);
+            const idx2 = STATE_ORDER.indexOf(d.face2State);
+            const strongestState = idx1 >= idx2 ? d.face1State : d.face2State;
+            const medianeColor = medianeColors[strongestState];
+            
+            return `<svg viewBox="0 0 90 90">
+                <line class="separator" x1="0" y1="45" x2="90" y2="45" stroke="${medianeColor}" stroke-width="1"/>
+                <g class="face1-${d.face1State}">${renderIcon(d.face1, false, d.face1State)}</g>
+                <g class="face2-${d.face2State}" transform="translate(0,45)">${renderIcon(d.face2, true, d.face2State)}</g>
+            </svg>`;
+        }
+        
+        // ============================================
+        // RENDU DES DOMINOS (positionnement absolu)
+        // ============================================
+        
+        function createDominoElement(domino, index) {
+            const el = document.createElement('div');
+            el.dataset.index = index;
+            
+            if (!domino) {
+                el.className = 'square empty';
+            } else if (domino.type === 'whiteBorder') {
+                el.className = 'square white-border';
+            } else {
+                el.className = 'square ' + (domino.state || 'white');
+                el.innerHTML = renderDominoSVG(domino);
+            }
+            
+            return el;
+        }
+        
+        function updateAllPositions() {
+            for (let i = 0; i < TOTAL; i++) {
+                const col = i % COLS;
+                const row = Math.floor(i / COLS);
+                const el = dominoElements[i];
+                if (el) {
+                    el.style.transition = 'none';
+                    el.style.left = (col * CELL_TOTAL) + 'px';
+                    el.style.top = (row * CELL_TOTAL) + 'px';
+                    // Appliquer la rotation du domino
+                    if (dominos[i] && dominos[i].rotation !== undefined) {
+                        el.style.transform = `rotate(${dominos[i].rotation}deg)`;
+                    }
+                }
+            }
+        }
+        
+        function render() {
+            container.innerHTML = '';
+            dominoElements = [];
+            
+            for (let i = 0; i < TOTAL; i++) {
+                const el = createDominoElement(dominos[i], i);
+                container.appendChild(el);
+                dominoElements.push(el);
+            }
+            
+            updateAllPositions();
+        }
+        
+        // ============================================
+        // SYSTÈME DE GHOSTS POUR WRAP-AROUND
+        // ============================================
+        
+        function createGhosts(axis, rowOrCol) {
+            clearGhosts();
+            
+            if (axis === 'horizontal') {
+                for (let c = 0; c < COLS; c++) {
+                    const idx = rowOrCol * COLS + c;
+                    const domino = dominos[idx];
+                    if (!domino) continue;
+                    
+                    // Ghost gauche
+                    const ghostLeft = createDominoElement(domino, idx);
+                    ghostLeft.classList.add('ghost');
+                    ghostLeft.style.left = (c * CELL_TOTAL - GRID_WIDTH) + 'px';
+                    ghostLeft.style.top = (rowOrCol * CELL_TOTAL) + 'px';
+                    if (domino.rotation) ghostLeft.style.transform = `rotate(${domino.rotation}deg)`;
+                    container.appendChild(ghostLeft);
+                    ghostElements.push({ el: ghostLeft, baseX: c * CELL_TOTAL - GRID_WIDTH, idx });
+                    
+                    // Ghost droite
+                    const ghostRight = createDominoElement(domino, idx);
+                    ghostRight.classList.add('ghost');
+                    ghostRight.style.left = (c * CELL_TOTAL + GRID_WIDTH) + 'px';
+                    ghostRight.style.top = (rowOrCol * CELL_TOTAL) + 'px';
+                    if (domino.rotation) ghostRight.style.transform = `rotate(${domino.rotation}deg)`;
+                    container.appendChild(ghostRight);
+                    ghostElements.push({ el: ghostRight, baseX: c * CELL_TOTAL + GRID_WIDTH, idx });
+                }
+            } else {
+                for (let r = 0; r < ROWS; r++) {
+                    const idx = r * COLS + rowOrCol;
+                    const domino = dominos[idx];
+                    if (!domino) continue;
+                    
+                    // Ghost haut
+                    const ghostTop = createDominoElement(domino, idx);
+                    ghostTop.classList.add('ghost');
+                    ghostTop.style.left = (rowOrCol * CELL_TOTAL) + 'px';
+                    ghostTop.style.top = (r * CELL_TOTAL - GRID_HEIGHT) + 'px';
+                    if (domino.rotation) ghostTop.style.transform = `rotate(${domino.rotation}deg)`;
+                    container.appendChild(ghostTop);
+                    ghostElements.push({ el: ghostTop, baseY: r * CELL_TOTAL - GRID_HEIGHT, idx });
+                    
+                    // Ghost bas
+                    const ghostBottom = createDominoElement(domino, idx);
+                    ghostBottom.classList.add('ghost');
+                    ghostBottom.style.left = (rowOrCol * CELL_TOTAL) + 'px';
+                    ghostBottom.style.top = (r * CELL_TOTAL + GRID_HEIGHT) + 'px';
+                    if (domino.rotation) ghostBottom.style.transform = `rotate(${domino.rotation}deg)`;
+                    container.appendChild(ghostBottom);
+                    ghostElements.push({ el: ghostBottom, baseY: r * CELL_TOTAL + GRID_HEIGHT, idx });
+                }
+            }
+        }
+        
+        function clearGhosts() {
+            ghostElements.forEach(g => g.el.remove());
+            ghostElements = [];
+        }
+        
+        // ============================================
+        // GESTION DU DRAG
+        // ============================================
+        
+        function startDrag(e) {
+            if (isAnimating) return;
+            
+            const el = e.target.closest('.square');
+            if (!el || el.classList.contains('ghost') || el.classList.contains('empty')) return;
+            
+            e.preventDefault();
+            
+            const idx = parseInt(el.dataset.index);
+            const col = idx % COLS;
+            const row = Math.floor(idx / COLS);
+            
+            isDragging = true;
+            dragAxis = null;
+            dragRow = row;
+            dragCol = col;
+            dragOffset = 0;
+            clickedDominoIdx = idx;
+            
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            dragStartX = clientX;
+            dragStartY = clientY;
+            dragStartTime = Date.now();
+            
+            // Calculer la position du clic relative au domino
+            const rect = el.getBoundingClientRect();
+            clickLocalX = clientX - rect.left;
+            
+            initialPositions = [];
+        }
+        
+        function moveDrag(e) {
+            if (!isDragging || isAnimating) return;
+            e.preventDefault();
+            
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const deltaX = clientX - dragStartX;
+            const deltaY = clientY - dragStartY;
+            
+            // Déterminer l'axe au premier mouvement significatif
+            if (dragAxis === null) {
+                const threshold = 8;
+                if (Math.abs(deltaX) > threshold || Math.abs(deltaY) > threshold) {
+                    dragAxis = Math.abs(deltaX) > Math.abs(deltaY) ? 'horizontal' : 'vertical';
+                    
+                    // Sauvegarder l'état avant le mouvement
+                    saveState();
+                    
+                    if (dragAxis === 'horizontal') {
+                        for (let c = 0; c < COLS; c++) {
+                            const idx = dragRow * COLS + c;
+                            initialPositions.push({
+                                idx,
+                                baseX: c * CELL_TOTAL
+                            });
+                        }
+                        createGhosts('horizontal', dragRow);
+                    } else {
+                        for (let r = 0; r < ROWS; r++) {
+                            const idx = r * COLS + dragCol;
+                            initialPositions.push({
+                                idx,
+                                baseY: r * CELL_TOTAL
+                            });
+                        }
+                        createGhosts('vertical', dragCol);
+                    }
+                }
+            }
+            
+            if (dragAxis === null) return;
+            
+            // Déplacer les dominos et les ghosts
+            if (dragAxis === 'horizontal') {
+                dragOffset = deltaX;
+                
+                for (const item of initialPositions) {
+                    const el = dominoElements[item.idx];
+                    if (el) {
+                        const newX = item.baseX + dragOffset;
+                        el.style.transition = 'none';
+                        el.style.left = newX + 'px';
+                    }
+                }
+                
+                for (const ghost of ghostElements) {
+                    const newX = ghost.baseX + dragOffset;
+                    ghost.el.style.transition = 'none';
+                    ghost.el.style.left = newX + 'px';
+                }
+            } else {
+                dragOffset = deltaY;
+                
+                for (const item of initialPositions) {
+                    const el = dominoElements[item.idx];
+                    if (el) {
+                        const newY = item.baseY + dragOffset;
+                        el.style.transition = 'none';
+                        el.style.top = newY + 'px';
+                    }
+                }
+                
+                for (const ghost of ghostElements) {
+                    const newY = ghost.baseY + dragOffset;
+                    ghost.el.style.transition = 'none';
+                    ghost.el.style.top = newY + 'px';
+                }
+            }
+        }
+        
+        function endDrag(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            const elapsed = Date.now() - dragStartTime;
+            const distance = Math.abs(dragOffset);
+            
+            // Si c'est un clic → rotation selon la position
+            if (distance < 8 && elapsed < 250 && clickedDominoIdx !== null) {
+                // Déterminer le sens de rotation selon la moitié cliquée
+                const clickedRight = clickLocalX > (CELL_SIZE / 2);
+                rotateDomino(clickedDominoIdx, clickedRight);
+                clearGhosts();
+                clickedDominoIdx = null;
+                dragAxis = null;
+                initialPositions = [];
+                return;
+            }
+            
+            clickedDominoIdx = null;
+            
+            if (dragAxis === null) {
+                clearGhosts();
+                return;
+            }
+            
+            // Calculer le nombre de crans
+            let steps = Math.round(dragOffset / CELL_TOTAL);
+            
+            if (dragAxis === 'horizontal') {
+                // Phase 1: Téléporter près de la cible (sans animation) pour éviter les sauts
+                for (const item of initialPositions) {
+                    const el = dominoElements[item.idx];
+                    if (!el) continue;
+                    
+                    let currentX = item.baseX + dragOffset;
+                    const originalCol = Math.round(item.baseX / CELL_TOTAL);
+                    const newCol = ((originalCol + steps) % COLS + COLS) % COLS;
+                    const targetX = newCol * CELL_TOTAL;
+                    
+                    // Normaliser currentX pour qu'il soit proche de targetX
+                    while (currentX - targetX > GRID_WIDTH / 2) currentX -= GRID_WIDTH;
+                    while (targetX - currentX > GRID_WIDTH / 2) currentX += GRID_WIDTH;
+                    
+                    el.style.transition = 'none';
+                    el.style.left = currentX + 'px';
+                }
+                
+                // Forcer reflow
+                container.offsetHeight;
+                
+                // Phase 2: Animer vers la position finale
+                for (const item of initialPositions) {
+                    const el = dominoElements[item.idx];
+                    if (!el) continue;
+                    
+                    const originalCol = Math.round(item.baseX / CELL_TOTAL);
+                    const newCol = ((originalCol + steps) % COLS + COLS) % COLS;
+                    const targetX = newCol * CELL_TOTAL;
+                    
+                    el.style.transition = 'left 0.15s ease-out';
+                    el.style.left = targetX + 'px';
+                }
+                
+                // Mettre à jour la grille logique
+                const row = dragRow;
+                const newRowDominos = [];
+                for (let c = 0; c < COLS; c++) {
+                    const sourceCol = ((c - steps) % COLS + COLS) % COLS;
+                    newRowDominos[c] = dominos[row * COLS + sourceCol];
+                }
+                for (let c = 0; c < COLS; c++) {
+                    dominos[row * COLS + c] = newRowDominos[c];
+                }
+                
+                // Tracker les indices qui ont bougé
+                lastMovedIndices = [];
+                for (let c = 0; c < COLS; c++) {
+                    lastMovedIndices.push(row * COLS + c);
+                }
+                
+            } else {
+                // Phase 1: Téléporter près de la cible (sans animation) pour éviter les sauts
+                for (const item of initialPositions) {
+                    const el = dominoElements[item.idx];
+                    if (!el) continue;
+                    
+                    let currentY = item.baseY + dragOffset;
+                    const originalRow = Math.round(item.baseY / CELL_TOTAL);
+                    const newRow = ((originalRow + steps) % ROWS + ROWS) % ROWS;
+                    const targetY = newRow * CELL_TOTAL;
+                    
+                    // Normaliser currentY pour qu'il soit proche de targetY
+                    while (currentY - targetY > GRID_HEIGHT / 2) currentY -= GRID_HEIGHT;
+                    while (targetY - currentY > GRID_HEIGHT / 2) currentY += GRID_HEIGHT;
+                    
+                    el.style.transition = 'none';
+                    el.style.top = currentY + 'px';
+                }
+                
+                // Forcer reflow
+                container.offsetHeight;
+                
+                // Phase 2: Animer vers la position finale
+                for (const item of initialPositions) {
+                    const el = dominoElements[item.idx];
+                    if (!el) continue;
+                    
+                    const originalRow = Math.round(item.baseY / CELL_TOTAL);
+                    const newRow = ((originalRow + steps) % ROWS + ROWS) % ROWS;
+                    const targetY = newRow * CELL_TOTAL;
+                    
+                    el.style.transition = 'top 0.15s ease-out';
+                    el.style.top = targetY + 'px';
+                }
+                
+                // Mettre à jour la grille logique
+                const col = dragCol;
+                const newColDominos = [];
+                for (let r = 0; r < ROWS; r++) {
+                    const sourceRow = ((r - steps) % ROWS + ROWS) % ROWS;
+                    newColDominos[r] = dominos[sourceRow * COLS + col];
+                }
+                for (let r = 0; r < ROWS; r++) {
+                    dominos[r * COLS + col] = newColDominos[r];
+                }
+                
+                // Tracker les indices qui ont bougé
+                lastMovedIndices = [];
+                for (let r = 0; r < ROWS; r++) {
+                    lastMovedIndices.push(r * COLS + col);
+                }
+            }
+            
+            clearGhosts();
+            
+            // Après l'animation, re-render proprement et vérifier les fusions
+            setTimeout(() => {
+                render();
+                checkFusions();
+            }, 160);
+            
+            dragAxis = null;
+            initialPositions = [];
+        }
+        
+        // ============================================
+        // ROTATION INDIVIDUELLE (clic simple)
+        // clockwise = true → horaire (+90°), false → antihoraire (-90°)
+        // ============================================
+        
+        function rotateDomino(idx, clockwise = true) {
+            const domino = dominos[idx];
+            if (!domino || domino.type === 'whiteBorder') return;
+            
+            saveState();
+            
+            // Rotation horaire (+90) ou antihoraire (-90)
+            domino.rotation = (domino.rotation || 0) + (clockwise ? 90 : -90);
+            lastMovedIndices = [idx];
+            
+            const el = dominoElements[idx];
+            if (el) {
+                el.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                el.style.transform = `rotate(${domino.rotation}deg)`;
+                
+                setTimeout(() => {
+                    checkFusions();
+                }, 300);
+            }
+        }
+        
+        // ============================================
+        // SYSTÈME DE FUSION
+        // ============================================
+        
+        function getPos(i) { return { x: i % COLS, y: Math.floor(i / COLS) }; }
+        function getIndex(x, y) { return (x < 0 || x >= COLS || y < 0 || y >= ROWS) ? -1 : y * COLS + x; }
+        
+        function getExposedFace(domino, dir) {
+            if (!domino || domino.type !== 'double') return null;
+            const r = ((domino.rotation % 360) + 360) % 360;
+            const map = {
+                0:   { top: 'face1', bottom: 'face2', left: null, right: null },
+                90:  { top: null, bottom: null, left: 'face2', right: 'face1' },
+                180: { top: 'face2', bottom: 'face1', left: null, right: null },
+                270: { top: null, bottom: null, left: 'face1', right: 'face2' }
+            };
+            const face = map[r]?.[dir];
+            return face ? domino[face] : null;
+        }
+        
+        function getExposedFaceKey(domino, dir) {
+            if (!domino || domino.type !== 'double') return null;
+            const r = ((domino.rotation % 360) + 360) % 360;
+            const map = {
+                0:   { top: 'face1', bottom: 'face2', left: null, right: null },
+                90:  { top: null, bottom: null, left: 'face2', right: 'face1' },
+                180: { top: 'face2', bottom: 'face1', left: null, right: null },
+                270: { top: null, bottom: null, left: 'face1', right: 'face2' }
+            };
+            return map[r]?.[dir] || null;
+        }
+        
+        function checkFusions() {
+            if (isAnimating) return;
+            
+            // Vérifier les fusions de dominos Unique adjacents
+            for (let i = 0; i < TOTAL; i++) {
+                if (!dominos[i] || dominos[i].type !== 'unique') continue;
+                const { x, y } = getPos(i);
+                
+                // Vérifier les 4 directions
+                const directions = [
+                    { dx: 1, dy: 0, dir: 'horizontal' },
+                    { dx: -1, dy: 0, dir: 'horizontal' },
+                    { dx: 0, dy: 1, dir: 'vertical' },
+                    { dx: 0, dy: -1, dir: 'vertical' }
+                ];
+                
+                for (const { dx, dy, dir } of directions) {
+                    const ni = getIndex(x + dx, y + dy);
+                    if (ni !== -1 && dominos[ni] && dominos[ni].type === 'unique') {
+                        const isMoved = lastMovedIndices.includes(i);
+                        const isNMoved = lastMovedIndices.includes(ni);
+                        if (isMoved && !isNMoved) {
+                            performUniqueFusion(ni, i, dir);
+                        } else {
+                            performUniqueFusion(i, ni, dir);
+                        }
+                        return;
+                    }
+                }
+            }
+            
+            // Vérifier les fusions de dominos Double avec faces identiques
+            for (let i = 0; i < TOTAL; i++) {
+                if (!dominos[i] || dominos[i].type !== 'double') continue;
+                const { x, y } = getPos(i);
+                
+                // Vérifier à droite
+                const iR = getIndex(x + 1, y);
+                if (iR !== -1 && dominos[iR] && dominos[iR].type === 'double') {
+                    const faceLeft = getExposedFace(dominos[i], 'right');
+                    const faceRight = getExposedFace(dominos[iR], 'left');
+                    if (faceLeft && faceRight && faceLeft === faceRight) {
+                        const isMoved = lastMovedIndices.includes(i);
+                        const isRMoved = lastMovedIndices.includes(iR);
+                        if (isMoved && !isRMoved) {
+                            performCompressionFusion(iR, i, 'horizontal');
+                        } else {
+                            performCompressionFusion(i, iR, 'horizontal');
+                        }
+                        return;
+                    }
+                }
+                
+                // Vérifier en bas
+                const iB = getIndex(x, y + 1);
+                if (iB !== -1 && dominos[iB] && dominos[iB].type === 'double') {
+                    const faceTop = getExposedFace(dominos[i], 'bottom');
+                    const faceBottom = getExposedFace(dominos[iB], 'top');
+                    if (faceTop && faceBottom && faceTop === faceBottom) {
+                        const isMoved = lastMovedIndices.includes(i);
+                        const isBMoved = lastMovedIndices.includes(iB);
+                        if (isMoved && !isBMoved) {
+                            performCompressionFusion(iB, i, 'vertical');
+                        } else {
+                            performCompressionFusion(i, iB, 'vertical');
+                        }
+                        return;
+                    }
+                }
+            }
+        }
+        
+        function performUniqueFusion(receiverIdx, projectileIdx, direction) {
+            if (isAnimating) return;
+            isAnimating = true;
+            
+            const receiver = dominos[receiverIdx];
+            const projectile = dominos[projectileIdx];
+            
+            const receiverEl = dominoElements[receiverIdx];
+            const projectileEl = dominoElements[projectileIdx];
+            
+            if (receiverEl) receiverEl.classList.add('fusion-animation');
+            if (projectileEl) projectileEl.classList.add('fusion-animation');
+            
+            setTimeout(() => {
+                const face1State = receiver.face1State;
+                const face2State = projectile.face1State;
+                
+                const newDomino = {
+                    face1: receiver.face1,
+                    face2: projectile.face1,
+                    face1State: face1State,
+                    face2State: face2State,
+                    rotation: direction === 'horizontal' ? 90 : 0,
+                    state: STATE_ORDER[Math.max(STATE_ORDER.indexOf(face1State), STATE_ORDER.indexOf(face2State))],
+                    type: 'double'
+                };
+                
+                dominos[receiverIdx] = newDomino;
+                dominos[projectileIdx] = { type: 'whiteBorder', rotation: 0 };
+                
+                render();
+                isAnimating = false;
+                lastMovedIndices = [];
+                
+                setTimeout(checkFusions, 50);
+            }, 400);
+        }
+        
+        function performCompressionFusion(receiverIdx, projectileIdx, direction) {
+            if (isAnimating) return;
+            isAnimating = true;
+            
+            const receiver = dominos[receiverIdx];
+            const projectile = dominos[projectileIdx];
+            
+            const receiverEl = dominoElements[receiverIdx];
+            const projectileEl = dominoElements[projectileIdx];
+            
+            if (!receiverEl || !projectileEl || !receiver || !projectile) {
+                isAnimating = false;
+                return;
+            }
+            
+            const isHorizontal = (direction === 'horizontal');
+            const receiverPos = getPos(receiverIdx);
+            const projectilePos = getPos(projectileIdx);
+            
+            let receiverTouchingKey, projectileTouchingKey, projectileFarKey;
+            
+            if (isHorizontal) {
+                if (projectilePos.x > receiverPos.x) {
+                    receiverTouchingKey = getExposedFaceKey(receiver, 'right');
+                    projectileTouchingKey = getExposedFaceKey(projectile, 'left');
+                    projectileFarKey = getExposedFaceKey(projectile, 'right');
+                } else {
+                    receiverTouchingKey = getExposedFaceKey(receiver, 'left');
+                    projectileTouchingKey = getExposedFaceKey(projectile, 'right');
+                    projectileFarKey = getExposedFaceKey(projectile, 'left');
+                }
+            } else {
+                if (projectilePos.y > receiverPos.y) {
+                    receiverTouchingKey = getExposedFaceKey(receiver, 'bottom');
+                    projectileTouchingKey = getExposedFaceKey(projectile, 'top');
+                    projectileFarKey = getExposedFaceKey(projectile, 'bottom');
+                } else {
+                    receiverTouchingKey = getExposedFaceKey(receiver, 'top');
+                    projectileTouchingKey = getExposedFaceKey(projectile, 'bottom');
+                    projectileFarKey = getExposedFaceKey(projectile, 'top');
+                }
+            }
+            
+            // Animation simple
+            projectileEl.classList.add('fusion-animation');
+            
+            setTimeout(() => {
+                const newDomino = {
+                    face1: receiver.face1,
+                    face2: receiver.face2,
+                    face1State: receiver.face1State,
+                    face2State: receiver.face2State,
+                    rotation: receiver.rotation,
+                    state: receiver.state,
+                    type: 'double'
+                };
+                
+                // Logique additive
+                if (receiverTouchingKey && projectileTouchingKey) {
+                    const receiverStateIdx = STATE_ORDER.indexOf(receiver[receiverTouchingKey + 'State']);
+                    const projectileStateIdx = STATE_ORDER.indexOf(projectile[projectileTouchingKey + 'State']);
+                    const sumIdx = Math.min(receiverStateIdx + projectileStateIdx + 1, STATE_ORDER.length - 1);
+                    newDomino[receiverTouchingKey + 'State'] = STATE_ORDER[sumIdx];
+                }
+                
+                const idx1 = STATE_ORDER.indexOf(newDomino.face1State);
+                const idx2 = STATE_ORDER.indexOf(newDomino.face2State);
+                newDomino.state = STATE_ORDER[Math.max(idx1, idx2)];
+                
+                // Recycler en domino unique
+                const recycledDomino = {
+                    face1: projectile[projectileFarKey],
+                    face1State: projectile[projectileFarKey + 'State'],
+                    rotation: 0,
+                    state: projectile[projectileFarKey + 'State'],
+                    type: 'unique'
+                };
+                
+                dominos[receiverIdx] = newDomino;
+                dominos[projectileIdx] = recycledDomino;
+                
+                render();
+                lastMovedIndices = [];
+                
+                setTimeout(() => {
+                    isAnimating = false;
+                    checkFusions();
+                }, 100);
+            }, 400);
+        }
+        
+        // ============================================
+        // UNDO
+        // ============================================
+        
+        function saveState() {
+            const snapshot = dominos.map(d => {
+                if (!d) return null;
+                return { ...d };
+            });
+            history.push(snapshot);
+            if (history.length > MAX_HISTORY) history.shift();
+            updateUndoButton();
+        }
+        
+        function undo() {
+            if (history.length === 0 || isAnimating) return;
+            dominos = history.pop().map(d => d ? { ...d } : null);
+            render();
+            updateUndoButton();
+        }
+        
+        function updateUndoButton() {
+            undoBtn.disabled = history.length === 0;
+        }
+        
+        // ============================================
+        // EVENT LISTENERS
+        // ============================================
+        
+        container.addEventListener('mousedown', startDrag);
+        container.addEventListener('touchstart', startDrag, { passive: false });
+        document.addEventListener('mousemove', moveDrag);
+        document.addEventListener('touchmove', moveDrag, { passive: false });
+        document.addEventListener('mouseup', endDrag);
+        document.addEventListener('touchend', endDrag);
+        undoBtn.addEventListener('click', undo);
+        
+        // ============================================
+        // INITIALISATION
+        // ============================================
+        
+        function init() {
+            updateDimensions();
+            initDominos();
+            render();
+            updateUndoButton();
+        }
+        
+        // Attendre que le DOM soit complètement prêt
+        if (document.readyState === 'complete') {
+            init();
+        } else {
+            window.addEventListener('load', init);
+        }
+        
+        // Recalculer les dimensions si la fenêtre change
+        window.addEventListener('resize', () => {
+            updateDimensions();
+            updateAllPositions();
+        });
+    </script>
+</body>
+</html>
