@@ -44,14 +44,18 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 36px 0;
+        padding: 8px;
     }
     .grid {
         display: grid;
         grid-template-columns: repeat(4, var(--cell));
         gap: var(--gap);
-        --cell: min(70px, 16vw);
-        --gap: 8px;
+        --gap: 6px;
+        /* cellule = (largeur ecran - marges - 3 gaps) / 4, plafonnee par la hauteur (6 lignes) */
+        --cell: min(
+            calc((100vw - 16px - 3 * var(--gap)) / 4),
+            calc((100dvh - 16px - 5 * var(--gap)) / 6)
+        );
     }
     .stage { position: relative; width: var(--cell); height: var(--cell); }
     .big, .small { position: absolute; inset: 0; transition: transform 0.55s cubic-bezier(.6,.05,.2,1); }
@@ -629,7 +633,7 @@ function executeRotation(indices, clockwise) {
   const start = performance.now();
   const stageEl = grid.children[0];
   const cellSize = stageEl.offsetWidth;
-  const gap = parseFloat(getComputedStyle(grid).gap) || 8;
+  const gap = parseFloat(getComputedStyle(grid).gap) || 6;
 
   function animate(t) {
     const p = Math.min((t - start) / duration, 1);
