@@ -1,1851 +1,702 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Fusion Square v9 - Rotation 3×3</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { height: 100%; overflow: hidden; touch-action: none; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-            background: #ffffff; 
-            min-height: 100vh; min-height: -webkit-fill-available;
-            display: flex; flex-direction: column; align-items: center;
-            justify-content: center; /* Centrage vertical */
-        }
-        
-        .top-zone {
-            padding: 10px;
-            flex-shrink: 0;
-            flex-grow: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-        }
-        
-        /* Conteneur principal avec zones de rotation */
-        .main-game-wrapper {
-            display: flex;
-            align-items: stretch; /* Les zones s'étirent sur toute la hauteur */
-            justify-content: center;
-            gap: 0;
-            height: min(90vw, 50vh); /* Hauteur fixe pour les zones */
-        }
-        
-        /* Zones de rotation latérales - transparentes, hauteur étendue */
-        .rotation-zone {
-            width: 50px;
-            height: 100%; /* Prend toute la hauteur disponible */
-            min-height: min(85vw, 45vh);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            cursor: grab;
-            user-select: none;
-            position: relative;
-            /* Totalement transparent */
-        }
-        
-        .rotation-zone:hover {
-            /* Pas de changement visuel au hover */
-        }
-        
-        .rotation-zone.active {
-            cursor: grabbing;
-            /* Pas de fond au touch */
-        }
-        
-        .rotation-zone-left {
-            /* Rien */
-        }
-        
-        .rotation-zone-right {
-            /* Rien */
-        }
-        
-        /* Indicateurs cachés */
-        .rotation-indicator,
-        .rotation-arrow {
-            display: none;
-        }
-        
-        .game-container { 
-            /* Conteneur invisible - plus de fond blanc arrondi */
-            position: relative; 
-            overflow: visible;
-        }
-        
-        .game-area { 
-            position: relative; 
-            width: min(85vw, 45vh); 
-            height: min(85vw, 45vh);
-            /* Plus de fond ni bordure - transparent */
-            overflow: visible;
-            transition: transform var(--rotation-duration, 0.4s) cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .game-area.rotating {
-            /* Animation gérée par JS */
-        }
-        
-        .rail { position: absolute; border: 2px dashed rgba(100,100,100,0.4); pointer-events: none; z-index: 2; }
-        .rail.dragging { border-color: #ffd700; border-style: solid; border-width: 3px; box-shadow: 0 0 15px rgba(255,215,0,0.4); }
-        .rail.snapping { border-color: #00ff88; border-style: solid; border-width: 3px; box-shadow: 0 0 20px rgba(0,255,136,0.5); }
-        
-        .local-rotation-indicator {
-            position: absolute;
-            border: 3px solid rgba(100, 200, 100, 0.9);
-            border-radius: 8px;
-            pointer-events: none;
-            z-index: 150;
-            opacity: 0;
-            background: rgba(100, 200, 100, 0.1);
-            transition: opacity 0.15s;
-        }
-        .local-rotation-indicator.visible { opacity: 1; }
-        .local-rotation-indicator.continuous {
-            border-color: rgba(255, 165, 0, 0.9);
-            background: rgba(255, 165, 0, 0.15);
-            box-shadow: 0 0 15px rgba(255, 165, 0, 0.4);
-        }
-        
-        .slider-xl { flex: 1; min-width: 180px; max-width: 280px; }
-        .diagonal-controls {
-            background: rgba(255, 165, 0, 0.1);
-            padding: 6px 10px;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 165, 0, 0.3);
-        }
-        .rail-c1 { top: 11.4%; left: 11.4%; right: 11.4%; bottom: 11.4%; }
-        .rail-c2 { top: 24.3%; left: 24.3%; right: 24.3%; bottom: 24.3%; }
-        .rail-c3 { top: 37.1%; left: 37.1%; right: 37.1%; bottom: 37.1%; }
-        
-        /* CENTRE: z-index réduit pour ne pas masquer les animations */
-        .center-sun { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-            border-radius: 15%; 
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
-            cursor: grab; 
-            z-index: 10; /* Même niveau que les pastilles */
-            transition: transform var(--rotation-duration, 0.4s) cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .center-sun.dragging { transform: translate(-50%, -50%) scale(1.15); box-shadow: 0 0 15px rgba(0,0,0,0.4); z-index: 100; }
-        .center-sun.arriving { animation: arriveCenter 0.4s ease-out forwards; }
-        .center-sun.vanishing { animation: vanishCenter 0.5s ease-out forwards; }
-        .center-sun.counter-rotating {
-            /* Contre-rotation appliquée par JS */
-        }
-        
-        @keyframes arriveCenter {
-            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-            50% { transform: translate(-50%, -50%) scale(1.2); }
-            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-        }
-        @keyframes vanishCenter { 
-            0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-            50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.8; }
-            100% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-        }
-        
-        .pastille { 
-            position: absolute; 
-            border-radius: 15%; 
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
-            cursor: grab; 
-            z-index: 10; 
-            transition: opacity 0.1s, transform 0.1s;
-        }
-        .pastille.blocked { animation: shake 0.3s ease-in-out; }
-        .pastille.vanishing { animation: vanish 0.5s ease-out forwards; pointer-events: none; }
-        .pastille.arriving { animation: arrive 0.4s ease-out forwards; }
-        .pastille.counter-rotating {
-            transition: transform var(--rotation-duration, 0.4s) cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        /* Pastille en rotation locale : z-index élevé pendant l'animation */
-        .pastille-anchor.rotating {
-            z-index: 50;
-        }
-        
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
-        @keyframes vanish { 
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.3); opacity: 0.8; box-shadow: 0 0 20px currentColor; }
-            100% { transform: scale(0); opacity: 0; }
-        }
-        @keyframes arrive {
-            0% { transform: scale(0); opacity: 0; }
-            50% { transform: scale(1.2); }
-            100% { transform: scale(1); opacity: 1; }
-        }
-        
-        /* Indicateur de rotation de matrice - SUPPRIMÉ */
-        .matrix-rotation-indicator {
-            display: none;
-        }
-        /* Style visible supprimé */
-        
-        /* Zone d'information supprimée pour centrer la matrice */
-        
-        /* Menu en bas */
-        .bottom-menu { 
-            display: flex; flex-direction: column; gap: 6px; padding: 10px; 
-            background: #ffffff; border-radius: 15px 15px 0 0; 
-            width: 100%; max-width: 100%;
-            flex-shrink: 0;
-            margin-top: auto; /* Pousse le menu en bas */
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
-        }
-        .controls { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; align-items: center; }
-        .control-item { background: rgba(100,100,150,0.1); padding: 4px 8px; border-radius: 12px; display: flex; align-items: center; gap: 4px; font-size: 0.7em; color: #333; }
-        .control-value { min-width: 20px; text-align: center; font-weight: bold; color: #667eea; }
-        button { padding: 6px 12px; font-size: 0.75em; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; }
-        button:active { transform: scale(0.95); }
-        
-        /* Boutons icônes compacts */
-        .icon-btn {
-            padding: 8px 12px;
-            font-size: 1.1em;
-            min-width: 40px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-        }
-        .icon-btn:active { transform: scale(0.95); }
-        
-        /* Sliders tactiles optimisés pour iPhone */
-        .slider-large {
-            flex: 1;
-            min-width: 100px;
-            max-width: 150px;
-        }
-        
-        .slider-touch {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 100%;
-            height: 24px;
-            background: transparent;
-            cursor: pointer;
-            touch-action: pan-x;
-        }
-        
-        .slider-touch::-webkit-slider-runnable-track {
-            width: 100%;
-            height: 12px;
-            background: rgba(100,100,150,0.15);
-            border-radius: 6px;
-        }
-        
-        .slider-touch::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 28px;
-            height: 28px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 50%;
-            cursor: pointer;
-            margin-top: -8px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        }
-        
-        .slider-touch::-moz-range-track {
-            width: 100%;
-            height: 12px;
-            background: rgba(100,100,150,0.15);
-            border-radius: 6px;
-        }
-        
-        .slider-touch::-moz-range-thumb {
-            width: 28px;
-            height: 28px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 50%;
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-        }
-        
-        .toggle-switch { position: relative; width: 32px; height: 18px; }
-        .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; cursor: pointer; inset: 0; background-color: rgba(100,100,150,0.2); border-radius: 18px; }
-        .toggle-slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-        input:checked + .toggle-slider { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        input:checked + .toggle-slider:before { transform: translateX(14px); }
-        .legend { display: flex; gap: 6px; font-size: 0.6em; flex-wrap: wrap; justify-content: center; color: #333; }
-        .legend-item { display: flex; align-items: center; gap: 3px; }
-        .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
-        
-        /* Boutons options */
-        .option-btn {
-            padding: 4px 10px;
-            font-size: 0.7em;
-            background: rgba(100,100,150,0.15);
-            color: #333;
-            border: 2px solid transparent;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .option-btn.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            font-weight: bold;
-        }
-        
-        /* Section rotation matrix */
-        .rotation-controls {
-            background: rgba(100, 100, 255, 0.1);
-            padding: 4px 8px;
-            border-radius: 8px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Totems africains v6</title>
+<!--
+  =====================================================================
+  REGLE DE DIFFICULTE (CŒUR DU JEU — A RESPECTER STRICTEMENT)
+  =====================================================================
+  Un totem N'EST PAS un dessin coupe en deux moities lisibles.
+  C'est une ENIGME de fusion :
+
+  D1  CHAQUE totem porte AU MOINS 3 elements DIFFERENTS qui CHEVAUCHENT
+      la frontiere centre<->contour (haut y=78, bas y=168, gauche x=72,
+      droite x=168). Jamais 1 seul element coupe : toujours 3+.
+  D2  CHAQUE MOITIE EST ILLISIBLE SEULE. Vue isolee, une moitie doit
+      EVOQUER AUTRE CHOSE (un arc anodin, un trait, un demi-cercle) et
+      NON l'element final. Seule la fusion centre+contour reconstitue
+      le motif -> force de DEDUCTION.
+  D3  Les elements se CROISENT sur des bords DIFFERENTS (pas tous en
+      haut) : on combine bord HAUT + bord BAS + un bord LATERAL, pour
+      que la lecture demande de recomposer dans plusieurs directions.
+  D4  decor neutre autorise (hors frontiere) mais il ne doit PAS livrer
+      la solution.
+  =====================================================================
+  CONTRAINTES TECHNIQUES (rappel projet)
+  R1 rien ne sort du cadre au repos        R2 viewBox 240, cadre rx18,
+  centre rect x72 y78 w96 h90 rx18         R5 decor neutre
+  R6 clipPath + classes                    R7 ne modifier que le demande
+  =====================================================================
+  v6 : 24 totems 6x4, base = v4. Separation .split PRESENTE mais PLUS
+  declenchee au clic (deplacement des seuls carres-contours = plus tard).
+-->
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { touch-action: none; }
+    body {
+        background-color: #14110d;
+        background-image:
+            radial-gradient(circle at 50% 12%, rgba(196,120,52,0.09), transparent 60%),
+            radial-gradient(circle at 50% 96%, rgba(150,60,40,0.07), transparent 60%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 36px 0;
+    }
+    .grid {
+        display: grid;
+        grid-template-columns: repeat(4, var(--cell));
+        gap: var(--gap);
+        --cell: min(70px, 16vw);
+        --gap: 8px;
+    }
+    .stage { position: relative; width: var(--cell); height: var(--cell); }
+    .big, .small { position: absolute; inset: 0; transition: transform 0.55s cubic-bezier(.6,.05,.2,1); }
+    .stage.split .big   { transform: translate(-52px, 0); }
+    .stage.split .small { transform: translate(52px, 0); }
+
+    .line   { stroke: #d9a066; stroke-width: 2.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .thin   { stroke: #d9a066; stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .border { stroke: rgba(217,160,102,0.30); stroke-width: 2; fill: none; }
+    .fill   { fill: #d9a066; }
+    .none   { fill: none; }
+</style>
 </head>
 <body>
-    <div class="top-zone">
-        <div class="main-game-wrapper">
-            <!-- Zone de rotation GAUCHE (transparente) -->
-            <div class="rotation-zone rotation-zone-left" id="rotationZoneLeft"></div>
-            
-            <div class="game-container">
-                <div class="game-area" id="gameArea">
-                    <div class="rail rail-c1"></div>
-                    <div class="rail rail-c2"></div>
-                    <div class="rail rail-c3"></div>
-                    <div class="center-sun" id="centerSun"></div>
-                    <div class="local-rotation-indicator" id="localRotationIndicator"></div>
-                    <div class="matrix-rotation-indicator" id="matrixIndicator">↻ 90°</div>
-                </div>
-            </div>
-            
-            <!-- Zone de rotation DROITE (transparente) -->
-            <div class="rotation-zone rotation-zone-right" id="rotationZoneRight"></div>
-        </div>
-    </div>
-    
-    <!-- Zone info supprimée pour centrer la matrice -->
-    
-    <div class="bottom-menu">
-        <div class="controls">
-            <button class="icon-btn" onclick="resetGame()">↺</button>
-            <div class="control-item slider-large">
-                <label>📐</label>
-                <input type="range" id="sizePastille" min="10" max="50" value="32" oninput="updateSizes()" class="slider-touch">
-                <span class="control-value" id="sizeValue">32</span>
-            </div>
-        </div>
-        <div class="controls diagonal-controls">
-            <div class="control-item slider-xl">
-                <label title="Zone de détection diagonale">⤡ Zone</label>
-                <input type="range" id="diagSensitivity" min="10" max="90" value="50" step="1" oninput="updateDiagSensitivity()" class="slider-touch">
-                <span class="control-value" id="diagSensValue">50%</span>
-            </div>
-        </div>
-        <div class="controls diagonal-controls">
-            <div class="control-item slider-xl">
-                <label title="Vitesse de rotation continue">⟳ Vitesse</label>
-                <input type="range" id="contRotSpeed" min="500" max="1500" value="500" step="50" oninput="updateContRotSpeed()" class="slider-touch">
-                <span class="control-value" id="contRotSpeedValue">500ms</span>
-            </div>
-        </div>
-        <div class="controls">
-            <div class="control-item rotation-controls">
-                <label>🔄</label>
-                <input type="range" id="rotationSpeed" min="100" max="1000" value="400" oninput="updateRotationSpeed()" style="width:60px;">
-                <span class="control-value" id="rotationSpeedValue">0.4s</span>
-            </div>
-            <button onclick="testMatrixRotation(1)">Test ↻</button>
-            <button onclick="testMatrixRotation(-1)">Test ↺</button>
-        </div>
-        <div class="controls">
-            <div class="control-item">
-                <label>Align:</label>
-                <button class="option-btn" id="align3Btn" onclick="setAlignMin(3)">3</button>
-                <button class="option-btn" id="align4Btn" onclick="setAlignMin(4)">4</button>
-                <button class="option-btn active" id="align2x2Btn" onclick="toggleSquareMatch()">2×2</button>
-            </div>
-            <div class="control-item">
-                <label>Diag:</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="diagAlignEnabled" checked onchange="toggleDiagAlign()">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-        </div>
-        <div class="controls">
-            <div class="control-item"><label>Rails:</label><label class="toggle-switch"><input type="checkbox" id="showRails" checked onchange="toggleRails()"><span class="toggle-slider"></span></label></div>
-            <div class="control-item">
-                <label>Gravité:</label>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="gravityEnabled" checked onchange="toggleGravity()">
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-        </div>
-        <div class="legend">
-            <div class="legend-item"><div class="legend-dot" style="background:#3498db;"></div><span>Bleu</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#f1c40f;"></div><span>Jaune</span></div>
-            <div class="legend-item"><div class="legend-dot" style="background:#e74c3c;"></div><span>Rouge</span></div>
-        </div>
-    </div>
-    
-    <script>
-        let canvasSize=520,cx=260,cy=260,padding,cellSize;
-        const gridSize=7;
-        
-        function updateDimensions(){
-            const ga=document.getElementById('gameArea');
-            canvasSize=ga.offsetWidth;
-            cx=canvasSize/2;
-            cy=canvasSize/2;
-            padding=canvasSize*0.05;
-            cellSize=(canvasSize-2*padding)/gridSize;
-            updateRailPositions();
-        }
-        
-        function updateRailPositions(){
-            const c0 = (padding + cellSize * 0.5) / canvasSize * 100;
-            const c1 = (padding + cellSize * 1.5) / canvasSize * 100;
-            const c2 = (padding + cellSize * 2.5) / canvasSize * 100;
-            
-            const rail1 = document.querySelector('.rail-c1');
-            const rail2 = document.querySelector('.rail-c2');
-            const rail3 = document.querySelector('.rail-c3');
-            
-            if(rail1) { rail1.style.top = c0+'%'; rail1.style.left = c0+'%'; rail1.style.right = c0+'%'; rail1.style.bottom = c0+'%'; }
-            if(rail2) { rail2.style.top = c1+'%'; rail2.style.left = c1+'%'; rail2.style.right = c1+'%'; rail2.style.bottom = c1+'%'; }
-            if(rail3) { rail3.style.top = c2+'%'; rail3.style.left = c2+'%'; rail3.style.right = c2+'%'; rail3.style.bottom = c2+'%'; }
-        }
-        
-        const c1Positions=[[0,0],[0,1],[0,2],[0,3],[0,4],[0,5],[0,6],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6],[6,5],[6,4],[6,3],[6,2],[6,1],[6,0],[5,0],[4,0],[3,0],[2,0],[1,0]];
-        const c2Positions=[[1,1],[1,2],[1,3],[1,4],[1,5],[2,5],[3,5],[4,5],[5,5],[5,4],[5,3],[5,2],[5,1],[4,1],[3,1],[2,1]];
-        const c3Positions=[[2,2],[2,3],[2,4],[3,4],[4,4],[4,3],[4,2],[3,2]];
-        const crownPositions=[c1Positions,c2Positions,c3Positions];
-        const crowns=[{count:24},{count:16},{count:8}];
-        
-        const cornerIndices = [
-            [0, 6, 12, 18],
-            [0, 4, 8, 12],
-            [0, 2, 4, 6]
-        ];
-        
-        function isCornerPosition(crown, index) {
-            const offsetIndex = Math.round(offsets[crown]);
-            const count = crowns[crown].count;
-            const actualIndex = ((index + offsetIndex) % count + count) % count;
-            return cornerIndices[crown].includes(actualIndex);
-        }
-        
-        // DÉFAUT: taille 32
-        let sizePastille = 32;
-        let sizeAncrage = 64; // 2x sizePastille
-        let radiusPastille = 15; // Fixe
-        
-        let data=[[],[],[]],offsets=[0,0,0];
-        let centerData = null;
-        const pastilleColors=["#ffffff","#000000"]; // 0=blanc, 1=noir
-        let isLocalRotating = false;
-        
-        // ============ PARAMÈTRES DE JEU ============
-        
-        // DÉFAUT: alignMinLength = 0 (désactivé), squareMatchEnabled = true (2x2 actif)
-        let alignMinLength = 0;
-        let squareMatchEnabled = true;
-        let diagAlignEnabled = true; // Toggle pour les diagonales dans findAlignments
-        let rotationDuration = 400;
-        let gravityEnabled = true;
-        
-        // ============ PARAMÈTRES DIAGONAUX ============
-        let diagSensitivity = 50;
-        let continuousRotationSpeed = 500;
-        let continuousRotationState = null;
-        let continuousRotationTimer = null;
-        
-        function updateDiagSensitivity() {
-            diagSensitivity = parseInt(document.getElementById('diagSensitivity').value);
-            document.getElementById('diagSensValue').textContent = diagSensitivity + '%';
-        }
-        
-        function updateContRotSpeed() {
-            continuousRotationSpeed = parseInt(document.getElementById('contRotSpeed').value);
-            document.getElementById('contRotSpeedValue').textContent = continuousRotationSpeed + 'ms';
-        }
-        
-        function stopContinuousRotation() {
-            if (continuousRotationTimer) { clearTimeout(continuousRotationTimer); continuousRotationTimer = null; }
-            continuousRotationState = null;
-            setTimeout(() => vanishAlignedPastilles(), 100);
-        }
-        
-        // ============ ROTATION MATRICIELLE ============
-        
-        let isMatrixRotating = false;
-        let matrixRotationDrag = null;
-        
-        function toggleGravity() {
-            gravityEnabled = document.getElementById('gravityEnabled').checked;
-        }
-        
-        function toggleDiagAlign() {
-            diagAlignEnabled = document.getElementById('diagAlignEnabled').checked;
-        }
-        
-        function updateRotationSpeed() {
-            rotationDuration = parseInt(document.getElementById('rotationSpeed').value);
-            document.getElementById('rotationSpeedValue').textContent = (rotationDuration / 1000).toFixed(1) + 's';
-            document.documentElement.style.setProperty('--rotation-duration', rotationDuration + 'ms');
-        }
-        
-        function testMatrixRotation(direction) {
-            rotateMatrix(direction);
-        }
-        
-        function rotateMatrix(direction) {
-            if (isMatrixRotating) return;
-            
-            isMatrixRotating = true;
-            const rotationAngle = direction * 90;
-            
-            const indicator = document.getElementById('matrixIndicator');
-            indicator.textContent = (direction > 0 ? '↻' : '↺') + ' 90°';
-            indicator.classList.add('visible');
-            
-            const gameArea = document.getElementById('gameArea');
-            const centerSun = document.getElementById('centerSun');
-            
-            gameArea.style.transition = `transform ${rotationDuration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
-            gameArea.style.transform = `rotate(${rotationAngle}deg)`;
-            
-            centerSun.style.transition = `transform ${rotationDuration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
-            centerSun.style.transform = `translate(-50%, -50%) rotate(${-rotationAngle}deg)`;
-            
-            document.querySelectorAll('.pastille').forEach(p => {
-                p.classList.add('counter-rotating');
-                p.style.transform = `rotate(${-rotationAngle}deg)`;
-            });
-            
-            playMatrixRotationSound();
-            
-            setTimeout(() => {
-                gameArea.style.transition = 'none';
-                centerSun.style.transition = 'none';
-                document.querySelectorAll('.pastille').forEach(p => {
-                    p.style.transition = 'none';
-                });
-                
-                void gameArea.offsetHeight;
-                
-                transposeDataForRotation(direction);
-                
-                gameArea.style.transform = 'rotate(0deg)';
-                centerSun.style.transform = 'translate(-50%, -50%)';
-                document.querySelectorAll('.pastille').forEach(p => {
-                    p.style.transform = 'rotate(0deg)';
-                    p.classList.remove('counter-rotating');
-                });
-                
-                void gameArea.offsetHeight;
-                
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        gameArea.style.transition = '';
-                        centerSun.style.transition = '';
-                        document.querySelectorAll('.pastille').forEach(p => {
-                            p.style.transition = '';
-                        });
-                    });
-                });
-                
-                indicator.classList.remove('visible');
-                isMatrixRotating = false;
-                
-                if (gravityEnabled) {
-                    setTimeout(() => {
-                        applyDownwardGravity();
-                        setTimeout(() => vanishAlignedPastilles(), 200);
-                    }, 50);
-                } else {
-                    setTimeout(() => vanishAlignedPastilles(), 50);
-                }
-                
-            }, rotationDuration + 50);
-        }
-        
-        function transposeDataForRotation(direction) {
-            const gridData = [];
-            
-            for (let c = 0; c < 3; c++) {
-                for (let i = 0; i < data[c].length; i++) {
-                    if (data[c][i] && data[c][i].value !== null) {
-                        const [row, col] = getGridPosition(c, i);
-                        gridData.push({
-                            color: data[c][i].value,
-                            row, col,
-                            anchor: data[c][i].anchor,
-                            elem: data[c][i].elem,
-                            isCenter: false
-                        });
-                    }
-                }
-            }
-            
-            if (centerData && centerData.value !== null) {
-                gridData.push({
-                    color: centerData.value,
-                    row: 3, col: 3,
-                    isCenter: true
-                });
-            }
-            
-            for (let c = 0; c < 3; c++) {
-                for (let i = 0; i < data[c].length; i++) {
-                    data[c][i] = null;
-                }
-            }
-            centerData = null;
-            
-            for (const item of gridData) {
-                let newRow, newCol;
-                
-                if (direction > 0) {
-                    newRow = item.col;
-                    newCol = 6 - item.row;
-                } else {
-                    newRow = 6 - item.col;
-                    newCol = item.row;
-                }
-                
-                if (newRow === 3 && newCol === 3) {
-                    centerData = { value: item.color };
-                    if (!item.isCenter && item.anchor) {
-                        item.anchor.remove();
-                    }
-                } else {
-                    const target = findCrownIndexForGridPosition(newRow, newCol);
-                    
-                    if (target) {
-                        if (item.isCenter) {
-                            const {anchor, elem} = createPastille(item.color, target.crown, target.index);
-                            data[target.crown][target.index] = { value: item.color, anchor, elem };
-                            positionPastille(anchor, target.crown, target.index);
-                        } else {
-                            data[target.crown][target.index] = {
-                                value: item.color,
-                                anchor: item.anchor,
-                                elem: item.elem
-                            };
-                            item.anchor.dataset.crown = target.crown;
-                            item.anchor.dataset.index = target.index;
-                            positionPastille(item.anchor, target.crown, target.index);
-                        }
-                    }
-                }
-            }
-            
-            updateCenterDisplay();
-        }
-        
-        function findCrownIndexForGridPosition(row, col) {
-            if (row === 3 && col === 3) return null;
-            
-            for (let c = 0; c < 3; c++) {
-                const positions = crownPositions[c];
-                const offset = Math.round(offsets[c]);
-                
-                for (let i = 0; i < positions.length; i++) {
-                    const posIdx = ((i + offset) % positions.length + positions.length) % positions.length;
-                    const [r, co] = positions[posIdx];
-                    if (r === row && co === col) {
-                        return { crown: c, index: i };
-                    }
-                }
-            }
-            return null;
-        }
-        
-        function initMatrixRotationZones() {
-            const leftZone = document.getElementById('rotationZoneLeft');
-            const rightZone = document.getElementById('rotationZoneRight');
-            
-            function handleZoneStart(e, side) {
-                if (isMatrixRotating) return;
-                
-                const touch = e.touches ? e.touches[0] : e;
-                matrixRotationDrag = {
-                    side,
-                    startY: touch.clientY,
-                    triggered: false
-                };
-                
-                (side === 'left' ? leftZone : rightZone).classList.add('active');
-                initAudio();
-                e.preventDefault();
-            }
-            
-            function handleZoneMove(e) {
-                if (!matrixRotationDrag || matrixRotationDrag.triggered || isMatrixRotating) return;
-                
-                const touch = e.touches ? e.touches[0] : e;
-                const dy = touch.clientY - matrixRotationDrag.startY;
-                
-                const threshold = 30;
-                
-                if (Math.abs(dy) > threshold) {
-                    let direction;
-                    if (matrixRotationDrag.side === 'left') {
-                        direction = dy < 0 ? 1 : -1;
-                    } else {
-                        direction = dy < 0 ? -1 : 1;
-                    }
-                    
-                    matrixRotationDrag.triggered = true;
-                    
-                    const zone = matrixRotationDrag.side === 'left' ? leftZone : rightZone;
-                    zone.classList.remove('active');
-                    
-                    rotateMatrix(direction);
-                }
-                
-                e.preventDefault();
-            }
-            
-            function handleZoneEnd(e) {
-                if (!matrixRotationDrag) return;
-                
-                const zone = matrixRotationDrag.side === 'left' ? leftZone : rightZone;
-                zone.classList.remove('active');
-                
-                matrixRotationDrag = null;
-            }
-            
-            leftZone.addEventListener('mousedown', e => handleZoneStart(e, 'left'));
-            leftZone.addEventListener('touchstart', e => handleZoneStart(e, 'left'), {passive: false});
-            
-            rightZone.addEventListener('mousedown', e => handleZoneStart(e, 'right'));
-            rightZone.addEventListener('touchstart', e => handleZoneStart(e, 'right'), {passive: false});
-            
-            document.addEventListener('mousemove', handleZoneMove);
-            document.addEventListener('touchmove', handleZoneMove, {passive: false});
-            document.addEventListener('mouseup', handleZoneEnd);
-            document.addEventListener('touchend', handleZoneEnd);
-        }
-        
-        function setAlignMin(n) {
-            if (alignMinLength === n) {
-                alignMinLength = 0;
-                document.getElementById('align3Btn').classList.remove('active');
-                document.getElementById('align4Btn').classList.remove('active');
-            } else {
-                alignMinLength = n;
-                document.getElementById('align3Btn').classList.toggle('active', n === 3);
-                document.getElementById('align4Btn').classList.toggle('active', n === 4);
-            }
-        }
-        
-        function toggleSquareMatch() {
-            squareMatchEnabled = !squareMatchEnabled;
-            document.getElementById('align2x2Btn').classList.toggle('active', squareMatchEnabled);
-        }
-        
-        // ============ GRAVITÉ VERS LE BAS ============
-        
-        function applyDownwardGravity() {
-            const grid = Array(7).fill(null).map(() => Array(7).fill(null));
-            
-            for (let c = 0; c < 3; c++) {
-                for (let i = 0; i < data[c].length; i++) {
-                    if (data[c][i] && data[c][i].value !== null) {
-                        const [row, col] = getGridPosition(c, i);
-                        grid[row][col] = {
-                            color: data[c][i].value,
-                            anchor: data[c][i].anchor,
-                            elem: data[c][i].elem,
-                            crown: c,
-                            index: i,
-                            isCenter: false
-                        };
-                    }
-                }
-            }
-            
-            if (centerData && centerData.value !== null) {
-                grid[3][3] = {
-                    color: centerData.value,
-                    isCenter: true
-                };
-            }
-            
-            let moved = false;
-            
-            for (let col = 0; col < 7; col++) {
-                const squaresInColumn = [];
-                for (let row = 0; row < 7; row++) {
-                    if (grid[row][col]) {
-                        squaresInColumn.push({ ...grid[row][col], originalRow: row });
-                    }
-                }
-                
-                if (squaresInColumn.length === 0) continue;
-                
-                const availablePositions = [];
-                for (let row = 6; row >= 0; row--) {
-                    if (row === 3 && col === 3) {
-                        availablePositions.push({ row: 3, col: 3, isCenter: true });
-                    } else {
-                        const target = findCrownIndexForGridPosition(row, col);
-                        if (target) {
-                            availablePositions.push({ row, col, ...target, isCenter: false });
-                        }
-                    }
-                }
-                
-                for (const square of squaresInColumn) {
-                    if (!square.isCenter && data[square.crown] && data[square.crown][square.index]) {
-                        data[square.crown][square.index] = null;
-                    }
-                }
-                if (col === 3 && grid[3][3] && grid[3][3].isCenter) {
-                    centerData = null;
-                }
-                
-                for (let i = 0; i < squaresInColumn.length && i < availablePositions.length; i++) {
-                    const square = squaresInColumn[squaresInColumn.length - 1 - i];
-                    const pos = availablePositions[i];
-                    
-                    if (pos.row !== square.originalRow) {
-                        moved = true;
-                    }
-                    
-                    if (pos.isCenter) {
-                        centerData = { value: square.color };
-                        if (!square.isCenter && square.anchor) {
-                            square.anchor.remove();
-                        }
-                    } else {
-                        if (square.isCenter) {
-                            const {anchor, elem} = createPastille(square.color, pos.crown, pos.index);
-                            data[pos.crown][pos.index] = { value: square.color, anchor, elem };
-                            positionPastille(anchor, pos.crown, pos.index);
-                        } else {
-                            data[pos.crown][pos.index] = {
-                                value: square.color,
-                                anchor: square.anchor,
-                                elem: square.elem
-                            };
-                            square.anchor.dataset.crown = pos.crown;
-                            square.anchor.dataset.index = pos.index;
-                            positionPastille(square.anchor, pos.crown, pos.index);
-                        }
-                    }
-                }
-            }
-            
-            updateCenterDisplay();
-            
-            if (moved) {
-                playGravitySound();
-            }
-            
-            return moved;
-        }
-        
-        // ============ ROTATION LOCALE 2x2 (DIAGONALE) ============
-        
-        function gridToPixel(row, col) {
-            return {
-                x: padding + col * cellSize + cellSize / 2,
-                y: padding + row * cellSize + cellSize / 2
-            };
-        }
-        
-        function getColorAt(row, col) {
-            if (row === 3 && col === 3) {
-                return centerData && centerData.value !== null ? centerData.value : null;
-            }
-            const target = findCrownIndexForGridPosition(row, col);
-            if (!target) return null;
-            const d = data[target.crown][target.index];
-            return d && d.value !== null ? d.value : null;
-        }
-        
-        function setColorAt(row, col, color) {
-            if (row === 3 && col === 3) {
-                if (color !== null) {
-                    centerData = { value: color };
-                } else {
-                    centerData = null;
-                }
-                return;
-            }
-            const target = findCrownIndexForGridPosition(row, col);
-            if (!target) return;
-            
-            if (color !== null) {
-                if (data[target.crown][target.index] && data[target.crown][target.index].anchor) {
-                    data[target.crown][target.index].value = color;
-                    data[target.crown][target.index].elem.style.background = pastilleColors[color];
-                    // Mettre à jour le liseré
-                    data[target.crown][target.index].elem.style.border = color === 0 ? '2px solid #000000' : 'none';
-                } else {
-                    const {anchor, elem} = createPastille(color, target.crown, target.index);
-                    data[target.crown][target.index] = { value: color, anchor, elem };
-                    positionPastille(anchor, target.crown, target.index);
-                }
-            } else {
-                if (data[target.crown][target.index] && data[target.crown][target.index].anchor) {
-                    data[target.crown][target.index].anchor.remove();
-                }
-                data[target.crown][target.index] = null;
-            }
-        }
-        
-        // ============ NOUVELLE MÉCANIQUE : ROTATION DIAGONALE ============
-        
-        // Les 9 zones 3x3 fixes (topRow, topCol)
-        const FIXED_ZONES = [
-            { topRow: 0, topCol: 0, pivot: [1, 1] },  // Zone 0
-            { topRow: 0, topCol: 2, pivot: [1, 3] },  // Zone 1
-            { topRow: 0, topCol: 4, pivot: [1, 5] },  // Zone 2
-            { topRow: 2, topCol: 0, pivot: [3, 1] },  // Zone 3
-            { topRow: 2, topCol: 2, pivot: [3, 3] },  // Zone 4 (centre grille)
-            { topRow: 2, topCol: 4, pivot: [3, 5] },  // Zone 5
-            { topRow: 4, topCol: 0, pivot: [5, 1] },  // Zone 6
-            { topRow: 4, topCol: 2, pivot: [5, 3] },  // Zone 7
-            { topRow: 4, topCol: 4, pivot: [5, 5] }   // Zone 8
-        ];
-        
-        // Vérifie si une position est un pivot (ne doit pas déclencher de rotation)
-        function isPivotPosition(row, col) {
-            return FIXED_ZONES.some(z => z.pivot[0] === row && z.pivot[1] === col);
-        }
-        
-        // Trouve la zone 3x3 fixe correspondant à une position et une direction
-        function findZoneForPosition(row, col, diagDirection) {
-            // Trouver toutes les zones auxquelles cette cellule appartient
-            const matchingZones = FIXED_ZONES.filter(zone => {
-                return row >= zone.topRow && row <= zone.topRow + 2 &&
-                       col >= zone.topCol && col <= zone.topCol + 2;
-            });
-            
-            if (matchingZones.length === 0) return null;
-            if (matchingZones.length === 1) return matchingZones[0];
-            
-            // Si plusieurs zones, choisir selon la direction du swipe
-            // upRight -> zone en haut à droite
-            // upLeft -> zone en haut à gauche
-            // downRight -> zone en bas à droite
-            // downLeft -> zone en bas à gauche
-            
-            let bestZone = matchingZones[0];
-            for (const zone of matchingZones) {
-                const zoneCenterRow = zone.topRow + 1;
-                const zoneCenterCol = zone.topCol + 1;
-                
-                switch(diagDirection) {
-                    case 'upRight':
-                        if (zoneCenterRow <= bestZone.topRow + 1 && zoneCenterCol >= bestZone.topCol + 1) {
-                            bestZone = zone;
-                        }
-                        break;
-                    case 'upLeft':
-                        if (zoneCenterRow <= bestZone.topRow + 1 && zoneCenterCol <= bestZone.topCol + 1) {
-                            bestZone = zone;
-                        }
-                        break;
-                    case 'downRight':
-                        if (zoneCenterRow >= bestZone.topRow + 1 && zoneCenterCol >= bestZone.topCol + 1) {
-                            bestZone = zone;
-                        }
-                        break;
-                    case 'downLeft':
-                        if (zoneCenterRow >= bestZone.topRow + 1 && zoneCenterCol <= bestZone.topCol + 1) {
-                            bestZone = zone;
-                        }
-                        break;
-                }
-            }
-            
-            return bestZone;
-        }
-        
-        function calculateDiagonalRotationGroup(sourceRow, sourceCol, diagDirection) {
-            // Les pivots ne déclenchent pas de rotation
-            if (isPivotPosition(sourceRow, sourceCol)) {
-                return null;
-            }
-            
-            const zone = findZoneForPosition(sourceRow, sourceCol, diagDirection);
-            if (!zone) return null;
-            
-            const { topRow, topCol } = zone;
-            
-            // 9 positions du groupe 3x3 :
-            // [0] [1] [2]
-            // [3] [4] [5]   <- [4] = centre (pivot fixe)
-            // [6] [7] [8]
-            return {
-                topRow, topCol,
-                positions: [
-                    [topRow, topCol],         // 0 - coin haut-gauche
-                    [topRow, topCol + 1],     // 1 - haut-centre
-                    [topRow, topCol + 2],     // 2 - coin haut-droite
-                    [topRow + 1, topCol],     // 3 - milieu-gauche
-                    [topRow + 1, topCol + 1], // 4 - CENTRE (pivot)
-                    [topRow + 1, topCol + 2], // 5 - milieu-droite
-                    [topRow + 2, topCol],     // 6 - coin bas-gauche
-                    [topRow + 2, topCol + 1], // 7 - bas-centre
-                    [topRow + 2, topCol + 2]  // 8 - coin bas-droite
-                ],
-                centerX: padding + (topCol + 1.5) * cellSize,
-                centerY: padding + (topRow + 1.5) * cellSize
-            };
-        }
-        
-        function getDiagonalRotationDirection(diagDirection, sourceRow, sourceCol, zone) {
-            // Logique cadran téléphonique : le sens dépend de la position dans la zone
-            // true = horaire (clockwise), false = anti-horaire
-            
-            // Position relative dans la zone 3x3
-            const relRow = sourceRow - zone.topRow; // 0, 1, ou 2
-            const relCol = sourceCol - zone.topCol; // 0, 1, ou 2
-            
-            // Position 1 : haut-centre (relRow=0, relCol=1)
-            if (relRow === 0 && relCol === 1) {
-                if (diagDirection === 'downLeft') return false;  // anti-horaire
-                if (diagDirection === 'downRight') return true;  // horaire
-            }
-            
-            // Position 2 : milieu-gauche (relRow=1, relCol=0)
-            // Réagit uniquement aux gestes vers la droite
-            if (relRow === 1 && relCol === 0) {
-                if (diagDirection === 'upRight') return true;     // horaire
-                if (diagDirection === 'downRight') return false;  // anti-horaire
-            }
-            
-            // Position 3 : milieu-droite (relRow=1, relCol=2)
-            // Réagit uniquement aux gestes vers la gauche
-            if (relRow === 1 && relCol === 2) {
-                if (diagDirection === 'upLeft') return false;     // anti-horaire
-                if (diagDirection === 'downLeft') return true;    // horaire
-            }
-            
-            // Position 4 : bas-centre (relRow=2, relCol=1)
-            if (relRow === 2 && relCol === 1) {
-                if (diagDirection === 'upLeft') return true;     // horaire
-                if (diagDirection === 'upRight') return false;   // anti-horaire
-            }
-            
-            // Coins : logique standard
-            // Coin haut-gauche (0,0)
-            if (relRow === 0 && relCol === 0) {
-                if (diagDirection === 'downRight') return true;  // horaire
-            }
-            
-            // Coin haut-droite (0,2)
-            if (relRow === 0 && relCol === 2) {
-                if (diagDirection === 'downLeft') return false;  // anti-horaire
-            }
-            
-            // Coin bas-gauche (2,0)
-            if (relRow === 2 && relCol === 0) {
-                if (diagDirection === 'upRight') return false;   // anti-horaire
-            }
-            
-            // Coin bas-droite (2,2)
-            if (relRow === 2 && relCol === 2) {
-                if (diagDirection === 'upLeft') return true;     // horaire
-            }
-            
-            // Défaut (ne devrait pas arriver)
-            return true;
-        }
-        
-        function detectDiagonalDirection(dx, dy) {
-            const absDx = Math.abs(dx);
-            const absDy = Math.abs(dy);
-            
-            if (absDx < 5 || absDy < 5) return null;
-            const ratio = absDx / absDy;
-            
-            // Seuils basés sur diagSensitivity (10-90)
-            // 50 = équilibré (ratio 0.3-3.0 original)
-            const minRatio = 0.7 - (diagSensitivity / 100) * 0.6;
-            const maxRatio = 1.4 + (diagSensitivity / 100) * 8.6;
-            
-            if (ratio < minRatio || ratio > maxRatio) return null;
-            
-            if (dy < 0 && dx > 0) return 'upRight';
-            if (dy < 0 && dx < 0) return 'upLeft';
-            if (dy > 0 && dx > 0) return 'downRight';
-            if (dy > 0 && dx < 0) return 'downLeft';
-            
-            return null;
-        }
-        
-        function getAvailableDiagonalDirections(row, col) {
-            // Les pivots ne déclenchent aucune rotation
-            if (isPivotPosition(row, col)) {
-                return [];
-            }
-            
-            // Pour toutes les autres positions, toutes les directions sont possibles
-            // La fonction findZoneForPosition déterminera la zone appropriée
-            return ['upRight', 'upLeft', 'downRight', 'downLeft'];
-        }
-        
-        function executeLocalRotation(group, clockwise, callback) {
-            if (isLocalRotating) return;
-            isLocalRotating = true;
-            
-            playLocalRotationSound();
-            
-            // Vérifier si le centre de la grille (3,3) fait partie du groupe
-            const gridCenterInGroup = group.positions.some(([r, c]) => r === 3 && c === 3);
-            
-            // Élever le z-index du centre pendant l'animation si nécessaire
-            const centerSun = document.getElementById('centerSun');
-            if (gridCenterInGroup) {
-                centerSun.style.zIndex = '50';
-            }
-            
-            // Récupérer les données des 9 cellules
-            const cells = group.positions.map(([r, c], idx) => {
-                const color = getColorAt(r, c);
-                let anchor = null;
-                if (r !== 3 || c !== 3) {
-                    const target = findCrownIndexForGridPosition(r, c);
-                    if (target && data[target.crown][target.index]) {
-                        anchor = data[target.crown][target.index].anchor;
-                        // Élever le z-index pendant l'animation (sauf pour le pivot central du 3x3)
-                        if (anchor && idx !== 4) anchor.classList.add('rotating');
-                    }
-                }
-                return { row: r, col: c, color, anchor, startPos: gridToPixel(r, c), posIndex: idx };
-            });
-            
-            // Indices de permutation pour rotation 3x3 :
-            // Les 8 cellules périphériques tournent, le centre (index 4) reste fixe
-            // Positions: 0,1,2,3,4,5,6,7,8
-            // Périphérie dans l'ordre horaire: 0 -> 1 -> 2 -> 5 -> 8 -> 7 -> 6 -> 3 -> 0
-            // 
-            // Horaire: chaque position reçoit la valeur de la position précédente dans le cycle
-            // Anti-horaire: chaque position reçoit la valeur de la position suivante dans le cycle
-            const peripheryOrder = [0, 1, 2, 5, 8, 7, 6, 3]; // ordre horaire du cycle
-            
-            // Calculer les nouvelles positions
-            // newIndices[i] = où la cellule i doit aller
-            const newIndices = [0, 1, 2, 3, 4, 5, 6, 7, 8]; // par défaut, chaque position reste
-            
-            for (let i = 0; i < peripheryOrder.length; i++) {
-                const currentPos = peripheryOrder[i];
-                const nextPos = peripheryOrder[(i + 1) % peripheryOrder.length];
-                const prevPos = peripheryOrder[(i - 1 + peripheryOrder.length) % peripheryOrder.length];
-                
-                if (clockwise) {
-                    // En horaire, la cellule à currentPos va à nextPos
-                    newIndices[currentPos] = nextPos;
-                } else {
-                    // En anti-horaire, la cellule à currentPos va à prevPos
-                    newIndices[currentPos] = prevPos;
-                }
-            }
-            // Le centre (4) reste à sa place
-            newIndices[4] = 4;
-            
-            // Assigner les positions de destination
-            for (let i = 0; i < 9; i++) {
-                const targetIdx = newIndices[i];
-                cells[i].endPos = gridToPixel(group.positions[targetIdx][0], group.positions[targetIdx][1]);
-                cells[i].targetRow = group.positions[targetIdx][0];
-                cells[i].targetCol = group.positions[targetIdx][1];
-            }
-            
-            // Animer aussi le centre de la grille s'il fait partie du groupe (mais PAS s'il est le pivot 3x3)
-            let gridCenterStartPos = null;
-            let gridCenterEndPos = null;
-            if (gridCenterInGroup) {
-                for (let i = 0; i < 9; i++) {
-                    if (cells[i].row === 3 && cells[i].col === 3 && i !== 4) {
-                        // Le centre de la grille (3,3) n'est PAS le pivot du 3x3, donc il bouge
-                        gridCenterStartPos = cells[i].startPos;
-                        gridCenterEndPos = cells[i].endPos;
-                        break;
-                    }
-                }
-            }
-            
-            // Durée d'animation : 70% du temps total en mode continu, 180ms en mode simple
-            const duration = continuousRotationState ? continuousRotationSpeed * 0.7 : 180;
-            const startTime = performance.now();
-            
-            function animate(currentTime) {
-                const progress = Math.min((currentTime - startTime) / duration, 1);
-                const eased = 1 - Math.pow(1 - progress, 3);
-                
-                for (const cell of cells) {
-                    // Le pivot central (index 4) ne bouge pas
-                    if (cell.posIndex === 4) continue;
-                    
-                    if (cell.anchor) {
-                        const x = cell.startPos.x + (cell.endPos.x - cell.startPos.x) * eased;
-                        const y = cell.startPos.y + (cell.endPos.y - cell.startPos.y) * eased;
-                        cell.anchor.style.left = (x - sizeAncrage/2) + 'px';
-                        cell.anchor.style.top = (y - sizeAncrage/2) + 'px';
-                    }
-                }
-                
-                // Animer le centre de la grille visuellement (s'il bouge)
-                if (gridCenterStartPos && gridCenterEndPos) {
-                    const ccx = gridCenterStartPos.x + (gridCenterEndPos.x - gridCenterStartPos.x) * eased;
-                    const ccy = gridCenterStartPos.y + (gridCenterEndPos.y - gridCenterStartPos.y) * eased;
-                    // Convertir en pourcentage pour le positionnement du centre
-                    const leftPercent = (ccx / canvasSize) * 100;
-                    const topPercent = (ccy / canvasSize) * 100;
-                    centerSun.style.left = leftPercent + '%';
-                    centerSun.style.top = topPercent + '%';
-                }
-                
-                if (progress < 1) {
-                    requestAnimationFrame(animate);
-                } else {
-                    finishLocalRotation(group, cells, newIndices, gridCenterInGroup, callback);
-                }
-            }
-            
-            requestAnimationFrame(animate);
-        }
-        
-        function finishLocalRotation(group, cells, newIndices, gridCenterInGroup, callback) {
-            const newColors = [null, null, null, null, null, null, null, null, null];
-            for (let i = 0; i < 9; i++) {
-                newColors[newIndices[i]] = cells[i].color;
-            }
-            
-            // Retirer la classe rotating et remettre z-index normal
-            for (const cell of cells) {
-                if (cell.anchor) {
-                    cell.anchor.classList.remove('rotating');
-                }
-            }
-            
-            for (const [r, c] of group.positions) {
-                if (r === 3 && c === 3) continue;
-                const target = findCrownIndexForGridPosition(r, c);
-                if (target && data[target.crown][target.index] && data[target.crown][target.index].anchor) {
-                    data[target.crown][target.index].anchor.remove();
-                    data[target.crown][target.index] = null;
-                }
-            }
-            
-            if (gridCenterInGroup) {
-                centerData = null;
-            }
-            
-            for (let i = 0; i < 9; i++) {
-                const [r, c] = group.positions[i];
-                if (newColors[i] !== null) {
-                    setColorAt(r, c, newColors[i]);
-                }
-            }
-            
-            // Remettre le centre à sa position normale (50%, 50%) et z-index
-            const centerSun = document.getElementById('centerSun');
-            centerSun.style.left = '50%';
-            centerSun.style.top = '50%';
-            centerSun.style.zIndex = '10';
-            
-            updateCenterDisplay();
-            
-            isLocalRotating = false;
-            
-            if (callback) {
-                callback();
-            } else {
-                setTimeout(() => vanishAlignedPastilles(), 100);
-            }
-        }
-        
-        function attemptDiagonalRotation(row, col, dx, dy) {
-            const diagDirection = detectDiagonalDirection(dx, dy);
-            if (!diagDirection) {
-                playBlockedSound();
-                return false;
-            }
-            
-            const availableDirections = getAvailableDiagonalDirections(row, col);
-            if (!availableDirections.includes(diagDirection)) {
-                playBlockedSound();
-                return false;
-            }
-            
-            const group = calculateDiagonalRotationGroup(row, col, diagDirection);
-            if (!group) {
-                playBlockedSound();
-                return false;
-            }
-            
-            // Compter les cellules remplies (sur les 9 positions)
-            let filledCount = 0;
-            for (const [r, c] of group.positions) {
-                if (getColorAt(r, c) !== null) filledCount++;
-            }
-            
-            // Au moins 2 pastilles pour que la rotation ait un sens
-            if (filledCount < 2) {
-                playBlockedSound();
-                return false;
-            }
-            
-            const clockwise = getDiagonalRotationDirection(diagDirection, row, col, group);
-            
-            // Démarrer la rotation continue
-            continuousRotationState = { row, col, diagDirection, group };
-            
-            function executeContinuousStep() {
-                if (!continuousRotationState) return;
-                
-                const grp = continuousRotationState.group;
-                if (!grp) { stopContinuousRotation(); return; }
-                
-                let cnt = 0;
-                for (const [r, c] of grp.positions) { if (getColorAt(r, c) !== null) cnt++; }
-                if (cnt < 2) { stopContinuousRotation(); return; }
-                
-                const cw = getDiagonalRotationDirection(continuousRotationState.diagDirection, continuousRotationState.row, continuousRotationState.col, grp);
-                executeLocalRotation(grp, cw, () => {
-                    if (continuousRotationState) {
-                        // Petit délai de 30% du temps pour laisser respirer entre les rotations
-                        continuousRotationTimer = setTimeout(executeContinuousStep, continuousRotationSpeed * 0.3);
-                    }
-                });
-            }
-            
-            executeContinuousStep();
-            return true;
-        }
-        
-        function playLocalRotationSound() {
-            if(!audioCtx) return;
-            const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-            o.connect(g); g.connect(audioCtx.destination);
-            o.frequency.setValueAtTime(400, audioCtx.currentTime);
-            o.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.15);
-            o.type = 'triangle';
-            g.gain.setValueAtTime(0.25, audioCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18);
-            o.start(); o.stop(audioCtx.currentTime + 0.18);
-        }
-        
-        // ============ MATRICE INITIALE FIXE ============
-        
-        const INITIAL_GRID = [
-            [1, 1, 1, 1, 1, 1, 1],  // Rangée 0: noirs
-            [1, 1, 1, 1, 1, 1, 1],  // Rangée 1: noirs
-            [1, 1, 1, 1, 1, 1, 1],  // Rangée 2: noirs
-            [null, null, null, null, null, null, null],  // Rangée 3: vide (milieu)
-            [0, 0, 0, 0, 0, 0, 0],  // Rangée 4: blancs
-            [0, 0, 0, 0, 0, 0, 0],  // Rangée 5: blancs
-            [0, 0, 0, 0, 0, 0, 0]   // Rangée 6: blancs
-        ];
-        
-        function loadInitialGrid() {
-            document.querySelectorAll('.pastille-anchor').forEach(el => el.remove());
-            data = [[], [], []];
-            offsets = [0, 0, 0];
-            centerData = null;
-            
-            // Centre vide (rangée 3 col 3)
-            const centerValue = INITIAL_GRID[3][3];
-            if (centerValue !== null) {
-                centerData = { value: centerValue };
-            }
-            
-            for (let c = 0; c < 3; c++) {
-                const positions = crownPositions[c];
-                for (let i = 0; i < positions.length; i++) {
-                    const [row, col] = positions[i];
-                    if (row === 3 && col === 3) continue;
-                    
-                    const color = INITIAL_GRID[row][col];
-                    if (color === null) {
-                        data[c][i] = null;
-                    } else {
-                        const {anchor, elem} = createPastille(color, c, i);
-                        data[c][i] = { value: color, anchor, elem };
-                        positionPastille(anchor, c, i);
-                    }
-                }
-            }
-            
-            updateCenterDisplay();
-        }
-        
-        // ============ AUDIO ============
-        
-        let audioCtx=null;
-        function initAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();}
-        function playTick(){if(!audioCtx)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.frequency.value=800;o.type='sine';g.gain.setValueAtTime(0.3,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.05);o.start(audioCtx.currentTime);o.stop(audioCtx.currentTime+0.05);}
-        function playBlockedSound(){if(!audioCtx)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.frequency.value=200;o.type='square';g.gain.setValueAtTime(0.2,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.1);o.start(audioCtx.currentTime);o.stop(audioCtx.currentTime+0.1);}
-        function playVanishSound(){
-            if(!audioCtx)return;
-            const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-            o.connect(g);g.connect(audioCtx.destination);
-            o.frequency.setValueAtTime(880,audioCtx.currentTime);
-            o.frequency.exponentialRampToValueAtTime(220,audioCtx.currentTime+0.4);
-            o.type='sine';
-            g.gain.setValueAtTime(0.3,audioCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.4);
-            o.start(audioCtx.currentTime);o.stop(audioCtx.currentTime+0.4);
-        }
-        function playGravitySound(){
-            if(!audioCtx)return;
-            const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-            o.connect(g);g.connect(audioCtx.destination);
-            o.frequency.setValueAtTime(500,audioCtx.currentTime);
-            o.frequency.exponentialRampToValueAtTime(300,audioCtx.currentTime+0.1);
-            o.type='sine';
-            g.gain.setValueAtTime(0.15,audioCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.1);
-            o.start(audioCtx.currentTime);o.stop(audioCtx.currentTime+0.1);
-        }
-        function playMatrixRotationSound(){
-            if(!audioCtx)return;
-            const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-            o.connect(g);g.connect(audioCtx.destination);
-            o.frequency.setValueAtTime(220,audioCtx.currentTime);
-            o.frequency.exponentialRampToValueAtTime(440,audioCtx.currentTime + rotationDuration/1000);
-            o.type='sine';
-            g.gain.setValueAtTime(0.2,audioCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime + rotationDuration/1000);
-            o.start(audioCtx.currentTime);
-            o.stop(audioCtx.currentTime + rotationDuration/1000);
-        }
-        
-        // ============ GRID & ALIGNMENT ============
-        
-        function getPositionOnSquare(crown,index){
-            const positions=crownPositions[crown],count=positions.length;
-            const realIndex=((index+offsets[crown])%count+count)%count;
-            const idx1=Math.floor(realIndex),idx2=(idx1+1)%count,t=realIndex-idx1;
-            const[row1,col1]=positions[idx1],[row2,col2]=positions[idx2];
-            const row=row1+(row2-row1)*t,col=col1+(col2-col1)*t;
-            const x=padding+col*cellSize+cellSize/2,y=padding+row*cellSize+cellSize/2;
-            return{x,y};
-        }
-        
-        function getGridPosition(crown,index){
-            const positions=crownPositions[crown],count=positions.length;
-            const offsetIndex=Math.round(offsets[crown]);
-            return positions[((index+offsetIndex)%count+count)%count];
-        }
-        
-        function buildGrid() {
-            const grid = Array(7).fill(null).map(() => Array(7).fill(null));
-            
-            if (centerData && centerData.value !== null) {
-                grid[3][3] = { type: 'center', color: centerData.value };
-            }
-            
-            for (let c = 0; c < 3; c++) {
-                for (let i = 0; i < data[c].length; i++) {
-                    if (!data[c][i] || data[c][i].value === null) continue;
-                    const [row, col] = getGridPosition(c, i);
-                    grid[row][col] = { type: 'crown', crown: c, index: i, color: data[c][i].value };
-                }
-            }
-            return grid;
-        }
-        
-        function findAlignments(minLength) {
-            const grid = buildGrid();
-            const alignments = [];
-            
-            // Directions: horizontal, vertical, et diagonales seulement si activées
-            const directions = [[0, 1], [1, 0]]; // H et V toujours
-            if (diagAlignEnabled) {
-                directions.push([1, 1], [1, -1]); // Diagonales si activées
-            }
-            
-            for (let row = 0; row < 7; row++) {
-                for (let col = 0; col < 7; col++) {
-                    if (!grid[row][col] || grid[row][col].color === null) continue;
-                    const startColor = grid[row][col].color;
-                    
-                    for (const [dr, dc] of directions) {
-                        const line = [{ row, col, ...grid[row][col] }];
-                        let r = row + dr, c = col + dc;
-                        
-                        while (r >= 0 && r < 7 && c >= 0 && c < 7) {
-                            if (grid[r][c] && grid[r][c].color === startColor) {
-                                line.push({ row: r, col: c, ...grid[r][c] });
-                                r += dr; c += dc;
-                            } else break;
-                        }
-                        
-                        if (line.length >= minLength) {
-                            const key = line.map(p => `${p.row},${p.col}`).sort().join('|');
-                            if (!alignments.find(a => a.key === key)) {
-                                alignments.push({ cells: line, color: startColor, key });
-                            }
-                        }
-                    }
-                }
-            }
-            return alignments;
-        }
-        
-        function findSquareMatches() {
-            const grid = buildGrid();
-            const squares = [];
-            
-            for (let row = 0; row < 6; row++) {
-                for (let col = 0; col < 6; col++) {
-                    const topLeft = grid[row][col];
-                    const topRight = grid[row][col + 1];
-                    const bottomLeft = grid[row + 1][col];
-                    const bottomRight = grid[row + 1][col + 1];
-                    
-                    if (topLeft && topRight && bottomLeft && bottomRight &&
-                        topLeft.color !== null &&
-                        topLeft.color === topRight.color &&
-                        topLeft.color === bottomLeft.color &&
-                        topLeft.color === bottomRight.color) {
-                        
-                        const cells = [
-                            { row, col, ...topLeft },
-                            { row, col: col + 1, ...topRight },
-                            { row: row + 1, col, ...bottomLeft },
-                            { row: row + 1, col: col + 1, ...bottomRight }
-                        ];
-                        
-                        const key = cells.map(p => `${p.row},${p.col}`).sort().join('|');
-                        if (!squares.find(s => s.key === key)) {
-                            squares.push({ cells, color: topLeft.color, key });
-                        }
-                    }
-                }
-            }
-            return squares;
-        }
-        
-        function vanishAlignedPastilles() {
-            const alignments = alignMinLength > 0 ? findAlignments(alignMinLength) : [];
-            const squareMatches = squareMatchEnabled ? findSquareMatches() : [];
-            const allMatches = [...alignments, ...squareMatches];
-            
-            if (allMatches.length === 0) return false;
-            
-            playVanishSound();
-            
-            const toVanish = new Set();
-            let centerVanishes = false;
-            
-            for (const match of allMatches) {
-                for (const cell of match.cells) {
-                    if (cell.type === 'crown') {
-                        toVanish.add(`${cell.crown}-${cell.index}`);
-                    } else if (cell.type === 'center') {
-                        centerVanishes = true;
-                    }
-                }
-            }
-            
-            for (const key of toVanish) {
-                const [crown, index] = key.split('-').map(Number);
-                if (data[crown][index] && data[crown][index].elem) {
-                    data[crown][index].elem.classList.add('vanishing');
-                    data[crown][index].value = null;
-                }
-            }
-            
-            if (centerVanishes && centerData) {
-                const sun = document.getElementById('centerSun');
-                sun.classList.add('vanishing');
-                centerData = null;
-                
-                setTimeout(() => {
-                    sun.classList.remove('vanishing');
-                    updateCenterDisplay();
-                }, 500);
-            }
-            
-            setTimeout(() => {
-                for (const key of toVanish) {
-                    const [crown, index] = key.split('-').map(Number);
-                    if (data[crown][index] && data[crown][index].anchor) {
-                        data[crown][index].anchor.remove();
-                        data[crown][index] = null;
-                    }
-                }
-            }, 500);
-            
-            return true;
-        }
-        
-        // ============ PASTILLES ============
-        
-        function createPastille(colorIdx, crown, index){
-            const anchor = document.createElement('div');
-            anchor.className = 'pastille-anchor';
-            anchor.style.cssText = `position:absolute;width:${sizeAncrage}px;height:${sizeAncrage}px;display:flex;align-items:center;justify-content:center;`;
-            anchor.dataset.crown = crown;
-            anchor.dataset.index = index;
-            
-            const elem = document.createElement('div');
-            elem.className = 'pastille';
-            // Liseré noir pour les blancs (colorIdx === 0)
-            const borderStyle = colorIdx === 0 ? 'border: 2px solid #000000;' : '';
-            elem.style.cssText = `width:${sizePastille}px;height:${sizePastille}px;border-radius:${radiusPastille}%;background:${pastilleColors[colorIdx]};position:relative;${borderStyle}`;
-            anchor.appendChild(elem);
-            document.getElementById('gameArea').appendChild(anchor);
-            return {anchor, elem};
-        }
-        
-        function positionPastille(anchor, crown, index){
-            const pos = getPositionOnSquare(crown, index);
-            anchor.style.left = (pos.x - sizeAncrage/2) + 'px';
-            anchor.style.top = (pos.y - sizeAncrage/2) + 'px';
-        }
-        
-        function updateAllPositions(){
-            for(let c = 0; c < 3; c++) {
-                for(let i = 0; i < data[c].length; i++) {
-                    if(data[c][i] && data[c][i].anchor) {
-                        positionPastille(data[c][i].anchor, c, i);
-                    }
-                }
-            }
-        }
-        
-        function updateCenterDisplay(){
-            const sun = document.getElementById('centerSun');
-            sun.style.width = sizePastille + 'px';
-            sun.style.height = sizePastille + 'px';
-            sun.style.borderRadius = radiusPastille + '%';
-            
-            if (centerData && centerData.value !== null) {
-                sun.style.background = pastilleColors[centerData.value];
-                sun.style.opacity = '1';
-                sun.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
-                sun.style.cursor = 'grab';
-                sun.style.display = 'block';
-                // Liseré noir pour les blancs
-                sun.style.border = centerData.value === 0 ? '2px solid #000000' : 'none';
-            } else {
-                sun.style.display = 'none'; /* Cacher complètement quand vide */
-            }
-        }
-        
-        function updateSizes(){
-            sizePastille = parseInt(document.getElementById('sizePastille').value);
-            sizeAncrage = sizePastille * 2;
-            radiusPastille = 15;
-            
-            document.getElementById('sizeValue').textContent = sizePastille;
-            
-            for(let c = 0; c < 3; c++) {
-                for(let i = 0; i < data[c].length; i++) {
-                    if(!data[c][i]) continue;
-                    const {anchor, elem} = data[c][i];
-                    if(anchor && elem) {
-                        anchor.style.width = sizeAncrage + 'px';
-                        anchor.style.height = sizeAncrage + 'px';
-                        elem.style.width = sizePastille + 'px';
-                        elem.style.height = sizePastille + 'px';
-                        elem.style.borderRadius = radiusPastille + '%';
-                    }
-                }
-            }
-            
-            updateCenterDisplay();
-            updateAllPositions();
-        }
-        
-        function toggleRails(){
-            document.querySelectorAll('.rail').forEach(r => 
-                r.style.opacity = document.getElementById('showRails').checked ? '1' : '0'
-            );
-        }
-        
-        // ============ DRAG HANDLING ============
-        
-        let activeDrag = null;
-        function getAngle(x, y){ return Math.atan2(y - cy, x - cx); }
-        
-        function handleStart(e){
-            if (isMatrixRotating || isLocalRotating) return;
-            
-            const target = e.target, ga = document.getElementById('gameArea'), rect = ga.getBoundingClientRect();
-            const px = e.touches ? e.touches[0].clientX : e.clientX;
-            const py = e.touches ? e.touches[0].clientY : e.clientY;
-            const x = px - rect.left, y = py - rect.top;
-            initAudio();
-            
-            if(target.id === 'centerSun'){
-                if(!centerData || centerData.value === null){
-                    e.preventDefault(); return;
-                }
-                activeDrag = {type:'diagonal', row: 3, col: 3, startX:x, startY:y, isCenter: true};
-                target.classList.add('dragging');
-                e.preventDefault(); return;
-            }
-            
-            let anchor = null;
-            if(target.classList.contains('pastille')) anchor = target.parentElement;
-            else if(target.classList.contains('pastille-anchor')) anchor = target;
-            
-            if(anchor){
-                const crown = parseInt(anchor.dataset.crown), index = parseInt(anchor.dataset.index);
-                if(!data[crown][index] || data[crown][index].value === null) return;
-                
-                const [row, col] = getGridPosition(crown, index);
-                const pos = getPositionOnSquare(crown, index);
-                
-                activeDrag = {
-                    type: 'detect', 
-                    anchor, 
-                    crown, 
-                    index, 
-                    row, 
-                    col,
-                    startX: x, 
-                    startY: y, 
-                    posX: pos.x, 
-                    posY: pos.y
-                };
-                e.preventDefault();
-            }
-        }
-        
-        function handleMove(e){
-            if(!activeDrag || isMatrixRotating || isLocalRotating) return;
-            const ga = document.getElementById('gameArea'), rect = ga.getBoundingClientRect();
-            const px = e.touches ? e.touches[0].clientX : e.clientX;
-            const py = e.touches ? e.touches[0].clientY : e.clientY;
-            const x = px - rect.left, y = py - rect.top;
-            const dx = x - activeDrag.startX, dy = y - activeDrag.startY, dist = Math.sqrt(dx*dx + dy*dy);
-            
-            if((activeDrag.type === 'diagonal' || activeDrag.type === 'detect') && dist > 15){
-                const row = activeDrag.row !== undefined ? activeDrag.row : getGridPosition(activeDrag.crown, activeDrag.index)[0];
-                const col = activeDrag.col !== undefined ? activeDrag.col : getGridPosition(activeDrag.crown, activeDrag.index)[1];
-                
-                const diagDirection = detectDiagonalDirection(dx, dy);
-                
-                if (diagDirection) {
-                    attemptDiagonalRotation(row, col, dx, dy);
-                    activeDrag = null;
-                    document.getElementById('centerSun').classList.remove('dragging');
-                } else {
-                    if (activeDrag.type === 'detect' && activeDrag.crown !== undefined) {
-                        const radialDirX = activeDrag.posX - cx, radialDirY = activeDrag.posY - cy;
-                        const radialLen = Math.sqrt(radialDirX*radialDirX + radialDirY*radialDirY);
-                        const tangentNormX = -radialDirY/radialLen, tangentNormY = radialDirX/radialLen;
-                        const dragNormX = dx/dist, dragNormY = dy/dist;
-                        const tangentProj = Math.abs(dragNormX*tangentNormX + dragNormY*tangentNormY);
-                        
-                        if (tangentProj > 0.7) {
-                            activeDrag.type = 'crownRotation';
-                            activeDrag.startAngle = getAngle(x, y);
-                            activeDrag.startOffset = offsets[activeDrag.crown];
-                            const railClass = ['rail-c1','rail-c2','rail-c3'][activeDrag.crown];
-                            const rail = document.querySelector('.' + railClass);
-                            if(rail) rail.classList.add('dragging');
-                        }
-                    }
-                }
-            }
-            
-            if(activeDrag && activeDrag.type === 'crownRotation'){
-                const currentAngle = getAngle(x, y);
-                let deltaAngle = currentAngle - activeDrag.startAngle;
-                if(deltaAngle > Math.PI) deltaAngle -= 2*Math.PI;
-                if(deltaAngle < -Math.PI) deltaAngle += 2*Math.PI;
-                const count = crowns[activeDrag.crown].count;
-                const deltaPositions = (deltaAngle / (2*Math.PI)) * count;
-                const oldSnap = Math.round(offsets[activeDrag.crown]);
-                offsets[activeDrag.crown] = activeDrag.startOffset + deltaPositions;
-                if(Math.round(offsets[activeDrag.crown]) !== oldSnap) playTick();
-                updateAllPositions();
-            }
-            
-            e.preventDefault();
-        }
-        
-        function handleEnd(e){
-            // Arrêter la rotation continue si active
-            if (continuousRotationState) {
-                stopContinuousRotation();
-            }
-            
-            if(!activeDrag) return;
-            
-            if(activeDrag.type === 'crownRotation'){
-                const crown = activeDrag.crown, count = crowns[crown].count;
-                const railClass = ['rail-c1','rail-c2','rail-c3'][crown];
-                const rail = document.querySelector('.' + railClass);
-                if(rail){ rail.classList.remove('dragging'); rail.classList.add('snapping'); setTimeout(() => rail.classList.remove('snapping'), 300); }
-                const targetOffset = Math.round(offsets[crown]) % count;
-                const startOffset = offsets[crown], startTime = performance.now();
-                
-                function animSnap(t){
-                    const p = Math.min((t - startTime) / 150, 1), eased = 1 - Math.pow(1-p, 3);
-                    offsets[crown] = startOffset + (targetOffset - startOffset) * eased;
-                    updateAllPositions();
-                    if(p < 1) requestAnimationFrame(animSnap);
-                    else {
-                        offsets[crown] = targetOffset;
-                        setTimeout(() => vanishAlignedPastilles(), 100);
-                    }
-                }
-                requestAnimationFrame(animSnap);
-            }
-            
-            document.getElementById('centerSun').classList.remove('dragging');
-            activeDrag = null;
-        }
-        
-        // ============ INIT ============
-        
-        function resetGame(){
-            stopContinuousRotation();
-            isLocalRotating = false;
-            
-            const gameArea = document.getElementById('gameArea');
-            const centerSun = document.getElementById('centerSun');
-            gameArea.style.transform = 'rotate(0deg)';
-            centerSun.style.transform = 'translate(-50%, -50%)';
-            centerSun.style.left = '50%';
-            centerSun.style.top = '50%';
-            
-            loadInitialGrid();
-        }
-        
-        function init(){
-            updateDimensions();
-            updateRotationSpeed();
-            updateDiagSensitivity();
-            updateContRotSpeed();
-            loadInitialGrid();
-            initMatrixRotationZones();
-        }
-        
-        window.addEventListener('resize', () => { updateDimensions(); updateAllPositions(); });
-        
-        const ga = document.getElementById('gameArea');
-        ga.addEventListener('mousedown', handleStart);
-        ga.addEventListener('touchstart', handleStart, {passive: false});
-        document.addEventListener('mousemove', handleMove);
-        document.addEventListener('touchmove', handleMove, {passive: false});
-        document.addEventListener('mouseup', handleEnd);
-        document.addEventListener('touchend', handleEnd);
-        document.addEventListener('touchcancel', handleEnd);
-        
-        init();
-    </script>
+<div class="grid" id="grid"></div>
+
+<script>
+// ----------------------------------------------------------------------
+// Cadre exterieur + decoupe centre (fill-rule evenodd) — identique a v4.
+// Frontieres : HAUT y=78, BAS y=168, GAUCHE x=72, DROITE x=168.
+// ----------------------------------------------------------------------
+const FRAME_BIG = `
+  <path class="border" fill-rule="evenodd"
+        d="M 36 1 H 204 A 35 35 0 0 1 239 36 V 204 A 35 35 0 0 1 204 239 H 36 A 35 35 0 0 1 1 204 V 36 A 35 35 0 0 1 36 1 Z
+           M 90 78 H 150 A 18 18 0 0 1 168 96 V 150 A 18 18 0 0 1 150 168 H 90 A 18 18 0 0 1 72 150 V 96 A 18 18 0 0 1 90 78 Z"/>`;
+const CENTER_BORDER = `<rect class="border" x="72" y="78" width="96" height="90" rx="18"/>`;
+const CENTER_PATH = `M 90 78 H 150 A 18 18 0 0 1 168 96 V 150 A 18 18 0 0 1 150 168 H 90 A 18 18 0 0 1 72 150 V 96 A 18 18 0 0 1 90 78 Z`;
+
+// clip "hors-centre" : ne garde QUE ce qui est en dehors du centre (moitie ext.)
+const OUT = (id) => `<clipPath id="${id}" clip-rule="evenodd"><path clip-rule="evenodd" d="M -40 -40 H 280 V 280 H -40 Z ${CENTER_PATH}"/></clipPath>`;
+// clip rectangulaire arbitraire (pour decouper finement une moitie)
+const RECT = (id,x,y,w,h) => `<clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath>`;
+// clip "interieur centre" : ne garde QUE ce qui est dans le centre (moitie int.)
+const INCLIP = (id) => `<clipPath id="${id}"><path d="${CENTER_PATH}"/></clipPath>`;
+
+// ----------------------------------------------------------------------
+// 24 totems. Chaque entree { big, small } applique D1..D4 :
+//   - 3+ elements a cheval, sur des bords DIFFERENTS,
+//   - chaque moitie EVOQUE autre chose,
+//   - la fusion seule revele le masque.
+// big  = moities EXTERIEURES (hors centre)
+// small = moities INTERIEURES (raccord) + 1 element neutre central
+// ----------------------------------------------------------------------
+const T = [];
+
+// 1 — Senufo : [HAUT] yeux-grain, [DROITE] nez-arete, [BAS] bouche.
+//    Ext: 2 arcs + 1 chevron + 1 demi-ellipse -> illisibles separes.
+T.push({
+  big: `${OUT('c1n')}
+    <path class="line" d="M 120 78 L 120 40"/>
+    <path class="line" d="M 120 48 C 96 40 86 24 92 14 C 104 24 116 36 120 48"/>
+    <path class="line" d="M 120 48 C 144 40 154 24 148 14 C 136 24 124 36 120 48"/>
+    ${RECT('c1eT',78,58,84,20)}
+    <g clip-path="url(#c1eT)"><path class="line none" d="M 88 78 Q 102 64 116 78"/><path class="line none" d="M 124 78 Q 138 64 152 78"/></g>
+    <g clip-path="url(#c1n)"><path class="line" d="M 152 100 L 188 116 L 152 132"/></g>
+    ${RECT('c1mB',96,168,48,22)}
+    <g clip-path="url(#c1mB)"><ellipse class="line none" cx="120" cy="168" rx="22" ry="12"/></g>`,
+  small: `${INCLIP('c1in')}
+    ${RECT('c1eB',78,78,84,20)}
+    <g clip-path="url(#c1eB)"><path class="line none" d="M 88 78 Q 102 92 116 78"/><path class="line none" d="M 124 78 Q 138 92 152 78"/></g>
+    ${RECT('c1nL',72,90,96,50)}
+    <g clip-path="url(#c1nL)"><path class="line" d="M 152 100 L 120 110 L 120 128 L 152 132"/></g>
+    <g clip-path="url(#c1in)"><ellipse class="line none" cx="120" cy="168" rx="22" ry="12"/></g>`
+});
+
+// 2 — Lune Baoule : [4 BORDS] disque + [HAUT] yeux mi-clos + [BAS] menton.
+T.push({
+  big: `${OUT('c2o')}
+    <path class="line" d="M 100 78 L 100 44"/><path class="line" d="M 120 78 L 120 36"/><path class="line" d="M 140 78 L 140 44"/>
+    <g clip-path="url(#c2o)"><circle class="thin" cx="120" cy="123" r="46"/></g>
+    ${RECT('c2eT',92,64,56,14)}
+    <g clip-path="url(#c2eT)"><path class="line none" d="M 96 78 Q 106 70 116 78"/><path class="line none" d="M 124 78 Q 134 70 144 78"/></g>
+    ${RECT('c2mB',100,168,40,20)}
+    <g clip-path="url(#c2mB)"><path class="line none" d="M 104 168 Q 120 182 136 168"/></g>`,
+  small: `${INCLIP('c2in')}
+    <g clip-path="url(#c2in)"><circle class="thin" cx="120" cy="123" r="46"/><path class="line" d="M 120 108 L 120 132"/></g>
+    ${RECT('c2eB',92,78,56,14)}
+    <g clip-path="url(#c2eB)"><path class="line none" d="M 96 78 Q 106 86 116 78"/><path class="line none" d="M 124 78 Q 134 86 144 78"/></g>
+    ${RECT('c2mT',100,150,40,18)}
+    <g clip-path="url(#c2mT)"><path class="line none" d="M 104 168 Q 120 154 136 168"/></g>`
+});
+
+// 3 — Chiwara : [HAUT] cornes + [GAUCHE]+[DROITE] yeux-amande + [BAS] museau.
+T.push({
+  big: `
+    <path class="line" d="M 110 78 C 96 60 92 40 100 16"/><path class="line" d="M 130 78 C 144 60 148 40 140 16"/>
+    ${RECT('c3eL',48,96,24,40)}
+    <g clip-path="url(#c3eL)"><path class="line none" d="M 84 116 Q 60 100 36 116 Q 60 132 84 116 Z"/></g>
+    ${RECT('c3eR',168,96,24,40)}
+    <g clip-path="url(#c3eR)"><path class="line none" d="M 156 116 Q 180 100 204 116 Q 180 132 156 116 Z"/></g>
+    ${RECT('c3mB',100,168,40,44)}
+    <g clip-path="url(#c3mB)"><path class="line" d="M 108 168 L 120 210 L 132 168"/><circle class="fill" cx="120" cy="202" r="3"/></g>`,
+  small: `${INCLIP('c3in')}
+    ${RECT('c3cT',72,78,96,16)}
+    <g clip-path="url(#c3cT)"><path class="line" d="M 110 78 C 108 84 109 90 110 94"/><path class="line" d="M 130 78 C 132 84 131 90 130 94"/></g>
+    ${RECT('c3eLin',72,96,24,40)}
+    <g clip-path="url(#c3eLin)"><path class="line none" d="M 84 116 Q 96 104 108 116 Q 96 128 84 116 Z"/><circle class="fill" cx="92" cy="116" r="2.4"/></g>
+    ${RECT('c3eRin',144,96,24,40)}
+    <g clip-path="url(#c3eRin)"><path class="line none" d="M 156 116 Q 144 104 132 116 Q 144 128 156 116 Z"/><circle class="fill" cx="148" cy="116" r="2.4"/></g>
+    <g clip-path="url(#c3in)"><path class="line" d="M 120 100 L 120 150"/><path class="line" d="M 108 168 L 116 156 M 132 168 L 124 156"/></g>`
+});
+
+// 4 — Dan : [HAUT] yeux-tubes + [GAUCHE]+[DROITE] anneaux + [BAS] barbe.
+T.push({
+  big: `${OUT('c4o')}
+    <path class="line" d="M 88 70 L 104 50 L 120 70 L 136 50 L 152 70"/>
+    ${RECT('c4eT',92,56,56,22)}
+    <g clip-path="url(#c4eT)"><circle class="line none" cx="104" cy="78" r="11"/><circle class="line none" cx="136" cy="78" r="11"/></g>
+    <g clip-path="url(#c4o)"><circle class="line none" cx="72" cy="118" r="13"/><circle class="line none" cx="168" cy="118" r="13"/></g>
+    ${RECT('c4bB',96,168,48,40)}
+    <g clip-path="url(#c4bB)"><path class="line" d="M 100 158 L 100 196 M 120 158 L 120 204 M 140 158 L 140 196"/><circle class="fill" cx="100" cy="196" r="3"/><circle class="fill" cx="120" cy="204" r="3"/><circle class="fill" cx="140" cy="196" r="3"/></g>`,
+  small: `${INCLIP('c4in')}
+    ${RECT('c4eB',92,78,56,22)}
+    <g clip-path="url(#c4eB)"><circle class="line none" cx="104" cy="78" r="11"/><circle class="line none" cx="136" cy="78" r="11"/></g>
+    ${RECT('c4lin',72,78,96,90)}
+    <g clip-path="url(#c4lin)"><circle class="line none" cx="72" cy="118" r="13"/><circle class="line none" cx="168" cy="118" r="13"/></g>
+    <g clip-path="url(#c4in)"><circle class="fill" cx="104" cy="86" r="2.6"/><circle class="fill" cx="136" cy="86" r="2.6"/><path class="line" d="M 120 96 L 112 130 L 128 130 Z"/><path class="line" d="M 100 158 L 100 146 M 120 158 L 120 144 M 140 158 L 140 146"/></g>`
+});
+
+// 5 — Scarifie : [HAUT] sourcils + [GAUCHE]+[DROITE] joues-scar + [BAS] bouche.
+T.push({
+  big: `${OUT('c5o')}
+    <path class="thin" d="M 90 60 Q 120 48 150 60"/>
+    ${RECT('c5bT',86,62,68,16)}
+    <g clip-path="url(#c5bT)"><path class="line none" d="M 92 78 Q 104 68 116 78"/><path class="line none" d="M 124 78 Q 136 68 148 78"/></g>
+    <g clip-path="url(#c5o)"><path class="thin" d="M 60 104 L 72 110 M 60 116 L 72 122 M 60 128 L 72 134"/><path class="thin" d="M 180 104 L 168 110 M 180 116 L 168 122 M 180 128 L 168 134"/></g>
+    ${RECT('c5mB',98,168,44,24)}
+    <g clip-path="url(#c5mB)"><rect class="line none" x="100" y="160" width="40" height="16" rx="6"/></g>`,
+  small: `${INCLIP('c5in')}
+    ${RECT('c5bB',86,78,68,16)}
+    <g clip-path="url(#c5bB)"><path class="line none" d="M 92 78 Q 104 88 116 78"/><path class="line none" d="M 124 78 Q 136 88 148 78"/></g>
+    ${RECT('c5jL',72,96,16,48)}
+    <g clip-path="url(#c5jL)"><path class="thin" d="M 84 110 L 72 110 M 84 122 L 72 122 M 84 134 L 72 134"/></g>
+    ${RECT('c5jR',152,96,16,48)}
+    <g clip-path="url(#c5jR)"><path class="thin" d="M 156 110 L 168 110 M 156 122 L 168 122 M 156 134 L 168 134"/></g>
+    <g clip-path="url(#c5in)"><circle class="fill" cx="104" cy="86" r="2.4"/><circle class="fill" cx="136" cy="86" r="2.4"/><path class="line" d="M 120 92 L 120 124 M 114 124 L 126 124"/><rect class="line none" x="100" y="150" width="40" height="16" rx="6"/></g>`
+});
+
+// 6 — Heaume : [HAUT] crete + [GAUCHE]+[DROITE] oreilles + [BAS] dents.
+T.push({
+  big: `${OUT('c6o')}
+    <path class="line" d="M 96 78 L 96 46 M 120 78 L 120 38 M 144 78 L 144 46"/>
+    <g clip-path="url(#c6o)"><path class="line none" d="M 72 100 Q 52 118 72 136"/><path class="line none" d="M 168 100 Q 188 118 168 136"/></g>
+    ${RECT('c6dB',92,168,56,24)}
+    <g clip-path="url(#c6dB)"><path class="line" d="M 96 168 L 96 182 M 110 168 L 110 184 M 124 168 L 124 184 M 138 168 L 138 182"/></g>`,
+  small: `${INCLIP('c6in')}
+    ${RECT('c6cT',86,78,68,14)}
+    <g clip-path="url(#c6cT)"><path class="line" d="M 96 78 L 96 90 M 120 78 L 120 92 M 144 78 L 144 90"/></g>
+    ${RECT('c6oL',72,100,16,36)}
+    <g clip-path="url(#c6oL)"><path class="line none" d="M 72 100 Q 92 118 72 136"/></g>
+    ${RECT('c6oR',152,100,16,36)}
+    <g clip-path="url(#c6oR)"><path class="line none" d="M 168 100 Q 148 118 168 136"/></g>
+    ${RECT('c6dT',92,150,56,18)}
+    <g clip-path="url(#c6dT)"><path class="line none" d="M 96 152 H 144"/><path class="line" d="M 96 168 L 96 156 M 110 168 L 110 152 M 124 168 L 124 152 M 138 168 L 138 156"/></g>
+    <g clip-path="url(#c6in)"><circle class="fill" cx="103" cy="110" r="2.4"/><circle class="fill" cx="137" cy="110" r="2.4"/><path class="line" d="M 120 116 L 120 138"/></g>`
+});
+
+// 7 — Oiseau : [HAUT] bec + [GAUCHE]+[DROITE] ailes + [BAS] queue.
+T.push({
+  big: `${OUT('c7o')}
+    ${RECT('c7bT',104,52,32,26)}
+    <g clip-path="url(#c7bT)"><path class="line" d="M 120 78 L 108 54 L 132 54 Z"/></g>
+    <g clip-path="url(#c7o)"><path class="thin" d="M 60 100 Q 48 118 60 138 L 72 118 Z"/><path class="thin" d="M 180 100 Q 192 118 180 138 L 168 118 Z"/></g>
+    ${RECT('c7tB',104,168,32,30)}
+    <g clip-path="url(#c7tB)"><path class="line" d="M 110 168 L 120 196 L 130 168"/></g>`,
+  small: `${INCLIP('c7in')}
+    ${RECT('c7bB',104,78,32,24)}
+    <g clip-path="url(#c7bB)"><path class="line" d="M 120 78 L 112 100 L 128 100 Z"/></g>
+    ${RECT('c7aL',72,100,18,36)}
+    <g clip-path="url(#c7aL)"><path class="thin" d="M 72 118 L 88 110 M 72 118 L 88 126"/></g>
+    ${RECT('c7aR',150,100,18,36)}
+    <g clip-path="url(#c7aR)"><path class="thin" d="M 168 118 L 152 110 M 168 118 L 152 126"/></g>
+    <g clip-path="url(#c7in)"><circle class="fill" cx="106" cy="92" r="2.6"/><circle class="fill" cx="134" cy="92" r="2.6"/><path class="line" d="M 120 104 L 120 150"/></g>`
+});
+
+// 8 — Bouclier : [HAUT] chevrons + [GAUCHE]+[DROITE] grecques + [BAS] frange.
+T.push({
+  big: `${OUT('c8o')}
+    <path class="line" d="M 86 70 L 103 52 L 120 70 L 137 52 L 154 70"/>
+    ${RECT('c8cT',82,62,76,16)}
+    <g clip-path="url(#c8cT)"><path class="line none" d="M 86 78 L 103 64 L 120 78 L 137 64 L 154 78"/></g>
+    <g clip-path="url(#c8o)"><path class="thin" d="M 60 104 L 70 104 L 70 114 M 60 132 L 70 132 L 70 122"/><path class="thin" d="M 180 104 L 170 104 L 170 114 M 180 132 L 170 132 L 170 122"/></g>
+    ${RECT('c8fB',92,168,56,26)}
+    <g clip-path="url(#c8fB)"><path class="line" d="M 98 168 L 98 188 M 110 168 L 110 192 M 122 168 L 122 188 M 134 168 L 134 192 M 144 168 L 144 188"/></g>`,
+  small: `${INCLIP('c8in')}
+    ${RECT('c8cB',82,78,76,16)}
+    <g clip-path="url(#c8cB)"><path class="line none" d="M 86 78 L 103 92 L 120 78 L 137 92 L 154 78"/></g>
+    ${RECT('c8gL',72,100,16,36)}
+    <g clip-path="url(#c8gL)"><path class="thin" d="M 84 104 L 74 104 L 74 114 M 84 132 L 74 132 L 74 122"/></g>
+    ${RECT('c8gR',152,100,16,36)}
+    <g clip-path="url(#c8gR)"><path class="thin" d="M 156 104 L 166 104 L 166 114 M 156 132 L 166 132 L 166 122"/></g>
+    <g clip-path="url(#c8in)"><circle class="fill" cx="106" cy="106" r="2.4"/><circle class="fill" cx="134" cy="106" r="2.4"/><rect class="line none" x="108" y="124" width="24" height="22" rx="6"/></g>`
+});
+
+// 9 — Soleil : [HAUT] rayons + [GAUCHE]+[DROITE] rayons lateraux + [BAS] croissant.
+T.push({
+  big: `${OUT('c9o')}
+    <path class="line" d="M 104 78 L 96 50 M 120 78 L 120 44 M 136 78 L 144 50"/>
+    <g clip-path="url(#c9o)"><path class="line" d="M 72 110 L 56 104 M 72 126 L 56 132"/><path class="line" d="M 168 110 L 184 104 M 168 126 L 184 132"/></g>
+    ${RECT('c9cB',96,168,48,26)}
+    <g clip-path="url(#c9cB)"><path class="line none" d="M 100 168 Q 120 190 140 168"/></g>`,
+  small: `${INCLIP('c9in')}
+    ${RECT('c9rT',92,78,56,14)}
+    <g clip-path="url(#c9rT)"><path class="line" d="M 104 78 L 106 90 M 120 78 L 120 92 M 136 78 L 134 90"/></g>
+    ${RECT('c9rL',72,100,16,36)}
+    <g clip-path="url(#c9rL)"><path class="line" d="M 72 110 L 86 113 M 72 126 L 86 123"/></g>
+    ${RECT('c9rR',152,100,16,36)}
+    <g clip-path="url(#c9rR)"><path class="line" d="M 168 110 L 154 113 M 168 126 L 154 123"/></g>
+    <g clip-path="url(#c9in)"><circle class="line none" cx="120" cy="116" r="18"/><circle class="fill" cx="120" cy="116" r="4"/></g>
+    ${RECT('c9cT',96,150,48,18)}
+    <g clip-path="url(#c9cT)"><path class="line none" d="M 100 168 Q 120 150 140 168"/></g>`
+});
+
+// 10 — Echelle : [HAUT] barreaux + [GAUCHE]+[DROITE] montants + [BAS] pieds.
+T.push({
+  big: `${OUT('c10o')}
+    <path class="thin" d="M 96 78 L 96 50 M 144 78 L 144 50 M 96 56 L 144 56 M 96 66 L 144 66"/>
+    <g clip-path="url(#c10o)"><path class="line" d="M 66 96 L 66 140 M 174 96 L 174 140"/></g>
+    ${RECT('c10pB',88,168,64,28)}
+    <g clip-path="url(#c10pB)"><path class="line" d="M 96 168 L 96 190 L 86 190 M 144 168 L 144 190 L 154 190"/></g>`,
+  small: `${INCLIP('c10in')}
+    ${RECT('c10bT',86,78,68,14)}
+    <g clip-path="url(#c10bT)"><path class="thin" d="M 96 78 L 96 90 M 144 78 L 144 90 M 96 84 L 144 84"/></g>
+    ${RECT('c10mL',72,96,16,44)}
+    <g clip-path="url(#c10mL)"><path class="line" d="M 80 96 L 80 140"/></g>
+    ${RECT('c10mR',152,96,16,44)}
+    <g clip-path="url(#c10mR)"><path class="line" d="M 160 96 L 160 140"/></g>
+    <g clip-path="url(#c10in)"><path class="line" d="M 96 100 L 96 150 M 144 100 L 144 150 M 96 114 L 144 114 M 96 132 L 144 132"/></g>`
+});
+
+// 11 — Coquillage : [HAUT] eventail + [GAUCHE]+[DROITE] volutes + [BAS] perles.
+T.push({
+  big: `${OUT('c11o')}
+    <path class="thin" d="M 120 78 L 100 52 M 120 78 L 120 48 M 120 78 L 140 52"/>
+    <g clip-path="url(#c11o)"><path class="thin" d="M 60 118 Q 72 106 72 120 Q 72 110 64 112"/><path class="thin" d="M 180 118 Q 168 106 168 120 Q 168 110 176 112"/></g>
+    ${RECT('c11pB',96,168,48,24)}
+    <g clip-path="url(#c11pB)"><circle class="fill" cx="104" cy="178" r="4"/><circle class="fill" cx="120" cy="182" r="4"/><circle class="fill" cx="136" cy="178" r="4"/></g>`,
+  small: `${INCLIP('c11in')}
+    ${RECT('c11eT',86,78,68,14)}
+    <g clip-path="url(#c11eT)"><path class="thin" d="M 120 78 L 106 90 M 120 78 L 120 92 M 120 78 L 134 90"/></g>
+    ${RECT('c11vL',72,100,16,36)}
+    <g clip-path="url(#c11vL)"><path class="thin" d="M 84 118 Q 74 110 80 120"/></g>
+    ${RECT('c11vR',152,100,16,36)}
+    <g clip-path="url(#c11vR)"><path class="thin" d="M 156 118 Q 166 110 160 120"/></g>
+    <g clip-path="url(#c11in)"><path class="thin" d="M 96 108 Q 120 100 144 108"/><path class="line none" d="M 110 126 Q 120 136 130 126"/></g>`
+});
+
+// 12 — Croix : [HAUT] branche + [GAUCHE]+[DROITE] bras + [BAS] base.
+T.push({
+  big: `${OUT('c12o')}
+    <path class="line" d="M 120 78 L 120 44 M 110 54 L 130 54"/>
+    <g clip-path="url(#c12o)"><path class="line" d="M 72 118 L 56 118 M 60 112 L 60 124"/><path class="line" d="M 168 118 L 184 118 M 180 112 L 180 124"/></g>
+    ${RECT('c12bB',104,168,32,26)}
+    <g clip-path="url(#c12bB)"><path class="line" d="M 120 168 L 120 192 M 108 192 L 132 192"/></g>`,
+  small: `${INCLIP('c12in')}
+    ${RECT('c12vT',104,78,32,14)}
+    <g clip-path="url(#c12vT)"><path class="line" d="M 120 78 L 120 92"/></g>
+    ${RECT('c12aL',72,100,16,36)}
+    <g clip-path="url(#c12aL)"><path class="line" d="M 72 118 L 88 118"/></g>
+    ${RECT('c12aR',152,100,16,36)}
+    <g clip-path="url(#c12aR)"><path class="line" d="M 168 118 L 152 118"/></g>
+    <g clip-path="url(#c12in)"><path class="line" d="M 120 96 L 120 150 M 96 118 L 144 118"/><circle class="fill" cx="120" cy="118" r="4"/></g>`
+});
+
+// 13 — Yeux ronds : [HAUT] yeux + [GAUCHE]+[DROITE] joues + [BAS] lobe.
+T.push({
+  big: `${OUT('c13o')}
+    ${RECT('c13eT',88,58,64,20)}
+    <g clip-path="url(#c13eT)"><circle class="line none" cx="103" cy="78" r="12"/><circle class="line none" cx="137" cy="78" r="12"/></g>
+    <g clip-path="url(#c13o)"><path class="thin" d="M 60 112 Q 70 122 60 132"/><path class="thin" d="M 180 112 Q 170 122 180 132"/></g>
+    ${RECT('c13lB',108,168,24,26)}
+    <g clip-path="url(#c13lB)"><circle class="line none" cx="120" cy="178" r="10"/></g>`,
+  small: `${INCLIP('c13in')}
+    ${RECT('c13eB',88,78,64,20)}
+    <g clip-path="url(#c13eB)"><circle class="line none" cx="103" cy="78" r="12"/><circle class="line none" cx="137" cy="78" r="12"/></g>
+    ${RECT('c13jL',72,100,16,36)}
+    <g clip-path="url(#c13jL)"><path class="thin" d="M 84 112 Q 76 122 84 132"/></g>
+    ${RECT('c13jR',152,100,16,36)}
+    <g clip-path="url(#c13jR)"><path class="thin" d="M 156 112 Q 164 122 156 132"/></g>
+    ${RECT('c13lT',108,150,24,18)}
+    <g clip-path="url(#c13lT)"><circle class="line none" cx="120" cy="158" r="10"/></g>
+    <g clip-path="url(#c13in)"><circle class="fill" cx="103" cy="84" r="2.6"/><circle class="fill" cx="137" cy="84" r="2.6"/><path class="line" d="M 120 96 L 120 130"/></g>`
+});
+
+// 14 — Vague : [HAUT] vague + [GAUCHE]+[DROITE] spirales + [BAS] ligne d'eau.
+T.push({
+  big: `${OUT('c14o')}
+    ${RECT('c14wT',80,52,80,26)}
+    <g clip-path="url(#c14wT)"><path class="line" d="M 84 70 Q 102 54 120 70 Q 138 86 156 70"/></g>
+    <g clip-path="url(#c14o)"><path class="thin" d="M 62 110 Q 56 118 62 126 Q 70 122 66 116"/><path class="thin" d="M 178 110 Q 184 118 178 126 Q 170 122 174 116"/></g>
+    ${RECT('c14lB',88,168,64,18)}
+    <g clip-path="url(#c14lB)"><path class="line" d="M 92 178 Q 110 172 130 178 Q 144 182 148 178"/></g>`,
+  small: `${INCLIP('c14in')}
+    ${RECT('c14wB',80,78,80,24)}
+    <g clip-path="url(#c14wB)"><path class="line" d="M 84 86 Q 102 102 120 86 Q 138 70 156 86"/></g>
+    ${RECT('c14sL',72,100,16,36)}
+    <g clip-path="url(#c14sL)"><path class="thin" d="M 84 118 Q 74 112 78 120 Q 80 116 82 118"/></g>
+    ${RECT('c14sR',152,100,16,36)}
+    <g clip-path="url(#c14sR)"><path class="thin" d="M 156 118 Q 166 112 162 120 Q 160 116 158 118"/></g>
+    ${RECT('c14lT',88,150,64,18)}
+    <g clip-path="url(#c14lT)"><path class="line" d="M 92 158 Q 110 164 130 158 Q 144 154 148 158"/></g>
+    <g clip-path="url(#c14in)"><path class="line none" d="M 100 128 Q 120 120 140 128"/></g>`
+});
+
+// 15 — Diamant : [HAUT] losange + [GAUCHE]+[DROITE] facettes + [BAS] pointe.
+T.push({
+  big: `${OUT('c15o')}
+    ${RECT('c15dT',96,48,48,30)}
+    <g clip-path="url(#c15dT)"><path class="line" d="M 120 78 L 100 56 L 120 40 L 140 56 Z"/></g>
+    <g clip-path="url(#c15o)"><path class="line" d="M 60 110 L 70 118 L 60 126"/><path class="line" d="M 180 110 L 170 118 L 180 126"/></g>
+    ${RECT('c15pB',104,168,32,30)}
+    <g clip-path="url(#c15pB)"><path class="line" d="M 108 168 L 120 196 L 132 168"/></g>`,
+  small: `${INCLIP('c15in')}
+    ${RECT('c15dB',96,78,48,28)}
+    <g clip-path="url(#c15dB)"><path class="line" d="M 120 78 L 100 100 L 120 116 L 140 100 Z"/></g>
+    ${RECT('c15fL',72,100,16,36)}
+    <g clip-path="url(#c15fL)"><path class="line" d="M 84 118 L 74 112 L 74 124 Z"/></g>
+    ${RECT('c15fR',152,100,16,36)}
+    <g clip-path="url(#c15fR)"><path class="line" d="M 156 118 L 166 112 L 166 124 Z"/></g>
+    ${RECT('c15pT',104,150,32,18)}
+    <g clip-path="url(#c15pT)"><path class="line" d="M 108 168 L 120 152 L 132 168"/></g>
+    <g clip-path="url(#c15in)"><circle class="fill" cx="120" cy="98" r="3"/></g>`
+});
+
+// 16 — Peigne : [HAUT] dents + [GAUCHE]+[DROITE] anses + [BAS] arc.
+T.push({
+  big: `${OUT('c16o')}
+    <path class="line" d="M 96 78 L 96 52 M 108 78 L 108 50 M 120 78 L 120 48 M 132 78 L 132 50 M 144 78 L 144 52"/>
+    <g clip-path="url(#c16o)"><path class="thin" d="M 60 112 L 72 112 L 72 124 L 60 124"/><path class="thin" d="M 180 112 L 168 112 L 168 124 L 180 124"/></g>
+    ${RECT('c16aB',100,168,40,28)}
+    <g clip-path="url(#c16aB)"><path class="line none" d="M 104 168 Q 120 192 136 168"/></g>`,
+  small: `${INCLIP('c16in')}
+    ${RECT('c16dT',86,78,68,14)}
+    <g clip-path="url(#c16dT)"><path class="line" d="M 96 78 L 96 90 M 108 78 L 108 90 M 120 78 L 120 90 M 132 78 L 132 90 M 144 78 L 144 90"/></g>
+    ${RECT('c16hL',72,100,16,36)}
+    <g clip-path="url(#c16hL)"><path class="thin" d="M 84 112 L 76 112 L 76 124 L 84 124"/></g>
+    ${RECT('c16hR',152,100,16,36)}
+    <g clip-path="url(#c16hR)"><path class="thin" d="M 156 112 L 164 112 L 164 124 L 156 124"/></g>
+    ${RECT('c16aT',100,150,40,18)}
+    <g clip-path="url(#c16aT)"><path class="line none" d="M 104 168 Q 120 150 136 168"/></g>
+    <g clip-path="url(#c16in)"><path class="thin" d="M 90 100 L 150 100"/></g>`
+});
+
+// 17 — Tortue : [HAUT] carapace + [GAUCHE]+[DROITE] pattes + [BAS] queue.
+T.push({
+  big: `${OUT('c17o')}
+    ${RECT('c17sT',92,50,56,28)}
+    <g clip-path="url(#c17sT)"><path class="line none" d="M 96 78 Q 120 44 144 78"/></g>
+    <g clip-path="url(#c17o)"><path class="line" d="M 64 106 L 54 100 M 64 130 L 54 136"/><path class="line" d="M 176 106 L 186 100 M 176 130 L 186 136"/></g>
+    ${RECT('c17tB',112,168,16,28)}
+    <g clip-path="url(#c17tB)"><path class="line" d="M 120 168 L 120 192"/></g>`,
+  small: `${INCLIP('c17in')}
+    ${RECT('c17sB',92,78,56,30)}
+    <g clip-path="url(#c17sB)"><path class="line none" d="M 96 78 Q 120 112 144 78"/><path class="thin" d="M 120 80 L 120 106 M 104 92 L 136 92"/></g>
+    ${RECT('c17pL',72,100,16,36)}
+    <g clip-path="url(#c17pL)"><path class="line" d="M 84 110 L 74 106 M 84 130 L 74 134"/></g>
+    ${RECT('c17pR',152,100,16,36)}
+    <g clip-path="url(#c17pR)"><path class="line" d="M 156 110 L 166 106 M 156 130 L 166 134"/></g>
+    ${RECT('c17tT',112,150,16,18)}
+    <g clip-path="url(#c17tT)"><path class="line" d="M 120 168 L 120 152"/></g>
+    <g clip-path="url(#c17in)"><path class="thin" d="M 108 124 L 132 124"/></g>`
+});
+
+// 18 — Trident : [HAUT] pointes + [GAUCHE]+[DROITE] crochets + [BAS] manche.
+T.push({
+  big: `${OUT('c18o')}
+    <path class="line" d="M 104 78 L 104 50 M 120 78 L 120 44 M 136 78 L 136 50"/>
+    <g clip-path="url(#c18o)"><path class="line" d="M 60 110 Q 70 118 60 126"/><path class="line" d="M 180 110 Q 170 118 180 126"/></g>
+    ${RECT('c18mB',112,168,16,30)}
+    <g clip-path="url(#c18mB)"><path class="line" d="M 120 168 L 120 194"/></g>`,
+  small: `${INCLIP('c18in')}
+    ${RECT('c18pT',96,78,48,14)}
+    <g clip-path="url(#c18pT)"><path class="line" d="M 104 78 L 104 90 M 120 78 L 120 90 M 136 78 L 136 90"/></g>
+    ${RECT('c18cL',72,100,16,36)}
+    <g clip-path="url(#c18cL)"><path class="line" d="M 84 118 Q 76 118 80 110"/></g>
+    ${RECT('c18cR',152,100,16,36)}
+    <g clip-path="url(#c18cR)"><path class="line" d="M 156 118 Q 164 118 160 110"/></g>
+    ${RECT('c18mT',112,150,16,18)}
+    <g clip-path="url(#c18mT)"><path class="line" d="M 120 168 L 120 152"/></g>
+    <g clip-path="url(#c18in)"><path class="line" d="M 96 110 L 144 110 M 120 110 L 120 150"/></g>`
+});
+
+// 19 — Masque double : [HAUT] yeux + [GAUCHE]+[DROITE] oreilles + [BAS] bouches.
+T.push({
+  big: `${OUT('c19o')}
+    ${RECT('c19eT',86,60,68,18)}
+    <g clip-path="url(#c19eT)"><path class="line none" d="M 92 78 Q 103 66 114 78"/><path class="line none" d="M 126 78 Q 137 66 148 78"/></g>
+    <g clip-path="url(#c19o)"><circle class="line none" cx="68" cy="118" r="10"/><circle class="line none" cx="172" cy="118" r="10"/></g>
+    ${RECT('c19mB',92,168,56,22)}
+    <g clip-path="url(#c19mB)"><path class="line none" d="M 96 168 Q 106 178 116 168"/><path class="line none" d="M 124 168 Q 134 178 144 168"/></g>`,
+  small: `${INCLIP('c19in')}
+    ${RECT('c19eB',86,78,68,18)}
+    <g clip-path="url(#c19eB)"><path class="line none" d="M 92 78 Q 103 90 114 78"/><path class="line none" d="M 126 78 Q 137 90 148 78"/></g>
+    ${RECT('c19oL',72,100,16,36)}
+    <g clip-path="url(#c19oL)"><circle class="line none" cx="80" cy="118" r="10"/></g>
+    ${RECT('c19oR',152,100,16,36)}
+    <g clip-path="url(#c19oR)"><circle class="line none" cx="160" cy="118" r="10"/></g>
+    ${RECT('c19mT',92,150,56,18)}
+    <g clip-path="url(#c19mT)"><path class="line none" d="M 96 168 Q 106 158 116 168"/><path class="line none" d="M 124 168 Q 134 158 144 168"/></g>
+    <g clip-path="url(#c19in)"><path class="line" d="M 120 96 L 120 124 M 112 124 L 128 124"/></g>`
+});
+
+// 20 — Etoile : [HAUT] branche + [GAUCHE]+[DROITE] eclats + [BAS] socle.
+T.push({
+  big: `${OUT('c20o')}
+    <path class="line" d="M 120 78 L 120 44 M 110 60 L 130 60"/>
+    <g clip-path="url(#c20o)"><path class="line" d="M 60 118 L 72 110 M 60 118 L 72 126"/><path class="line" d="M 180 118 L 168 110 M 180 118 L 168 126"/></g>
+    ${RECT('c20sB',96,168,48,24)}
+    <g clip-path="url(#c20sB)"><rect class="line none" x="100" y="168" width="40" height="16" rx="4"/></g>`,
+  small: `${INCLIP('c20in')}
+    ${RECT('c20bT',104,78,32,16)}
+    <g clip-path="url(#c20bT)"><path class="line" d="M 120 78 L 120 92 M 112 86 L 128 86"/></g>
+    ${RECT('c20eL',72,100,16,36)}
+    <g clip-path="url(#c20eL)"><path class="line" d="M 84 118 L 74 110 M 84 118 L 74 126"/></g>
+    ${RECT('c20eR',152,100,16,36)}
+    <g clip-path="url(#c20eR)"><path class="line" d="M 156 118 L 166 110 M 156 118 L 166 126"/></g>
+    ${RECT('c20sT',96,150,48,18)}
+    <g clip-path="url(#c20sT)"><rect class="line none" x="100" y="152" width="40" height="16" rx="4"/></g>
+    <g clip-path="url(#c20in)"><path class="line" d="M 120 100 L 124 114 L 138 114 L 127 123 L 131 137 L 120 128 L 109 137 L 113 123 L 102 114 L 116 114 Z"/></g>`
+});
+
+// 21 — Filet : [HAUT] croisillons + [GAUCHE]+[DROITE] noeuds + [BAS] frange.
+T.push({
+  big: `${OUT('c21o')}
+    <path class="thin" d="M 96 78 L 110 54 M 110 78 L 96 54 M 130 78 L 144 54 M 144 78 L 130 54"/>
+    <g clip-path="url(#c21o)"><circle class="line none" cx="62" cy="118" r="6"/><circle class="line none" cx="178" cy="118" r="6"/></g>
+    ${RECT('c21fB',92,168,56,26)}
+    <g clip-path="url(#c21fB)"><path class="line" d="M 98 168 L 98 190 M 110 168 L 110 192 M 122 168 L 122 188 M 134 168 L 134 192 M 144 168 L 144 190"/></g>`,
+  small: `${INCLIP('c21in')}
+    ${RECT('c21xT',86,78,68,14)}
+    <g clip-path="url(#c21xT)"><path class="thin" d="M 96 78 L 110 90 M 110 78 L 96 90 M 130 78 L 144 90 M 144 78 L 130 90"/></g>
+    ${RECT('c21nL',72,100,16,36)}
+    <g clip-path="url(#c21nL)"><circle class="line none" cx="80" cy="118" r="6"/></g>
+    ${RECT('c21nR',152,100,16,36)}
+    <g clip-path="url(#c21nR)"><circle class="line none" cx="160" cy="118" r="6"/></g>
+    <g clip-path="url(#c21in)"><path class="thin" d="M 92 100 L 148 130 M 148 100 L 92 130"/><circle class="fill" cx="120" cy="115" r="3"/></g>`
+});
+
+// 22 — Sablier : [HAUT] triangle + [GAUCHE]+[DROITE] anses + [BAS] triangle.
+T.push({
+  big: `${OUT('c22o')}
+    ${RECT('c22tT',100,50,40,28)}
+    <g clip-path="url(#c22tT)"><path class="line" d="M 104 50 L 136 50 L 120 78 Z"/></g>
+    <g clip-path="url(#c22o)"><path class="line" d="M 60 108 Q 50 118 60 128"/><path class="line" d="M 180 108 Q 190 118 180 128"/></g>
+    ${RECT('c22tB',100,168,40,28)}
+    <g clip-path="url(#c22tB)"><path class="line" d="M 104 196 L 136 196 L 120 168 Z"/></g>`,
+  small: `${INCLIP('c22in')}
+    ${RECT('c22tBin',100,78,40,30)}
+    <g clip-path="url(#c22tBin)"><path class="line" d="M 104 78 L 136 78 L 120 100 Z"/></g>
+    ${RECT('c22aL',72,100,16,36)}
+    <g clip-path="url(#c22aL)"><path class="line" d="M 84 108 Q 76 118 84 128"/></g>
+    ${RECT('c22aR',152,100,16,36)}
+    <g clip-path="url(#c22aR)"><path class="line" d="M 156 108 Q 164 118 156 128"/></g>
+    ${RECT('c22tTin',100,138,40,30)}
+    <g clip-path="url(#c22tTin)"><path class="line" d="M 104 168 L 136 168 L 120 146 Z"/></g>
+    <g clip-path="url(#c22in)"><circle class="fill" cx="120" cy="123" r="3"/></g>`
+});
+
+// 23 — Spirale : [HAUT] boucle + [GAUCHE]+[DROITE] crochets + [BAS] virgule.
+T.push({
+  big: `${OUT('c23o')}
+    ${RECT('c23sT',96,46,48,32)}
+    <g clip-path="url(#c23sT)"><path class="thin" d="M 120 78 C 104 70 104 52 120 50 C 134 50 138 62 128 66"/></g>
+    <g clip-path="url(#c23o)"><path class="thin" d="M 60 112 Q 70 118 62 126"/><path class="thin" d="M 180 112 Q 170 118 178 126"/></g>
+    ${RECT('c23vB',104,168,32,28)}
+    <g clip-path="url(#c23vB)"><path class="line" d="M 120 168 C 128 180 120 192 110 190"/></g>`,
+  small: `${INCLIP('c23in')}
+    ${RECT('c23bT',96,78,48,14)}
+    <g clip-path="url(#c23bT)"><path class="thin" d="M 120 78 C 110 82 110 90 118 90"/></g>
+    ${RECT('c23cL',72,100,16,36)}
+    <g clip-path="url(#c23cL)"><path class="thin" d="M 84 112 Q 74 118 82 126"/></g>
+    ${RECT('c23cR',152,100,16,36)}
+    <g clip-path="url(#c23cR)"><path class="thin" d="M 156 112 Q 166 118 158 126"/></g>
+    ${RECT('c23vT',104,150,32,18)}
+    <g clip-path="url(#c23vT)"><path class="line" d="M 120 168 C 116 160 118 154 122 152"/></g>
+    <g clip-path="url(#c23in)"><path class="thin" d="M 120 96 C 138 100 138 124 120 124 C 106 124 104 110 116 110"/></g>`
+});
+
+// 24 — Masque royal : [HAUT] couronne + [GAUCHE]+[DROITE] boucles + [BAS] collier.
+T.push({
+  big: `${OUT('c24o')}
+    <path class="line" d="M 92 78 L 96 52 L 108 64 L 120 46 L 132 64 L 144 52 L 148 78"/>
+    <g clip-path="url(#c24o)"><circle class="line none" cx="66" cy="118" r="9"/><circle class="line none" cx="174" cy="118" r="9"/></g>
+    ${RECT('c24cB',92,168,56,24)}
+    <g clip-path="url(#c24cB)"><path class="thin" d="M 96 168 Q 120 188 144 168"/><circle class="fill" cx="120" cy="184" r="4"/></g>`,
+  small: `${INCLIP('c24in')}
+    ${RECT('c24kT',86,78,68,14)}
+    <g clip-path="url(#c24kT)"><path class="line" d="M 92 78 L 92 90 M 108 78 L 108 88 M 120 78 L 120 90 M 132 78 L 132 88 M 148 78 L 148 90"/></g>
+    ${RECT('c24bL',72,100,16,36)}
+    <g clip-path="url(#c24bL)"><circle class="line none" cx="80" cy="118" r="9"/></g>
+    ${RECT('c24bR',152,100,16,36)}
+    <g clip-path="url(#c24bR)"><circle class="line none" cx="160" cy="118" r="9"/></g>
+    ${RECT('c24cT',92,150,56,18)}
+    <g clip-path="url(#c24cT)"><path class="thin" d="M 96 168 Q 120 150 144 168"/></g>
+    <g clip-path="url(#c24in)"><circle class="fill" cx="103" cy="104" r="2.4"/><circle class="fill" cx="137" cy="104" r="2.4"/><path class="line" d="M 120 108 L 120 134"/></g>`
+});
+
+// ----------------------------------------------------------------------
+// Rendu grille 4 colonnes x 6 lignes (24 totems)
+// ----------------------------------------------------------------------
+const COLS = 4, ROWS = 6, TOTAL = T.length;
+const grid = document.getElementById('grid');
+
+// bigOrder[cellIndex] = index du contenu .big affiche dans cette cellule.
+// Les .small ne sont JAMAIS reordonnes : ils restent a leur cellule d'origine.
+let bigOrder = T.map((_, i) => i);
+
+function bigSVG(contentIdx) {
+  return `<svg class="big" viewBox="0 0 240 240">${FRAME_BIG}${T[contentIdx].big}</svg>`;
+}
+function smallSVG(cellIdx) {
+  return `<svg class="small" viewBox="0 0 240 240">${CENTER_BORDER}${T[cellIdx].small}</svg>`;
+}
+
+function render() {
+  grid.innerHTML = '';
+  for (let i = 0; i < TOTAL; i++) {
+    const stage = document.createElement('div');
+    stage.className = 'stage';
+    stage.dataset.index = i;
+    stage.innerHTML = bigSVG(bigOrder[i]) + smallSVG(i);
+    grid.appendChild(stage);
+  }
+}
+render();
+
+// ======================================================================
+// Mouvement diagonal applique UNIQUEMENT aux carres externes (.big).
+// Swipe diagonal -> rotation continue d'un bloc 2x2 de .big.
+// Repris de fusion-square-5x5-mobile. Les .small restent fixes.
+// ======================================================================
+const ROTATION_SPEED = 800;
+let isLocalRotating = false;
+let dragState = null;
+
+function getPos(i) { return { x: i % COLS, y: Math.floor(i / COLS) }; }
+function getIndex(x, y) { return (x < 0 || x >= COLS || y < 0 || y >= ROWS) ? -1 : y * COLS + x; }
+
+function detectDiag(dx, dy) {
+  const ax = Math.abs(dx), ay = Math.abs(dy);
+  if (ax < 15 || ay < 15 || ax / ay < 0.5 || ax / ay > 2) return null;
+  return dy < 0 ? (dx > 0 ? 'ur' : 'ul') : (dx > 0 ? 'dr' : 'dl');
+}
+
+function getGroup(x, y, dir) {
+  const offsets = { ur: [0, -1], ul: [-1, -1], dr: [0, 0], dl: [-1, 0] };
+  const [ox, oy] = offsets[dir];
+  const tx = x + ox, ty = y + oy;
+  if (tx < 0 || tx > COLS - 2 || ty < 0 || ty > ROWS - 2) return null;
+  return [getIndex(tx, ty), getIndex(tx + 1, ty), getIndex(tx, ty + 1), getIndex(tx + 1, ty + 1)];
+}
+
+function isClockwise(dir) { return dir === 'ur' || dir === 'dr'; }
+
+function executeRotation(indices, clockwise) {
+  if (isLocalRotating) return;
+  isLocalRotating = true;
+
+  const stages = Array.from(grid.children);
+  const cells = indices.map((idx) => ({
+    el: stages[idx].querySelector('.big'),
+    sx: idx % COLS, sy: Math.floor(idx / COLS)
+  }));
+  // couper la transition CSS : l'anim est pilotee frame par frame en JS
+  cells.forEach(c => { if (c.el) c.el.style.transition = 'none'; });
+
+  const map = clockwise ? [2, 0, 3, 1] : [1, 3, 0, 2];
+  cells.forEach((c, i) => {
+    const ti = map[i];
+    c.tx = indices[ti] % COLS;
+    c.ty = Math.floor(indices[ti] / COLS);
+  });
+
+  const duration = ROTATION_SPEED * 0.5;
+  const start = performance.now();
+  const stageEl = grid.children[0];
+  const cellSize = stageEl.offsetWidth;
+  const gap = parseFloat(getComputedStyle(grid).gap) || 8;
+
+  function animate(t) {
+    const p = Math.min((t - start) / duration, 1);
+    const e = 1 - Math.pow(1 - p, 3);
+    cells.forEach(c => {
+      if (c.el) {
+        const dx = (c.tx - c.sx) * (cellSize + gap) * e;
+        const dy = (c.ty - c.sy) * (cellSize + gap) * e;
+        c.el.style.transform = `translate(${dx}px, ${dy}px)`;
+      }
+    });
+    if (p < 1) requestAnimationFrame(animate);
+    else finishRotation(indices, clockwise);
+  }
+  requestAnimationFrame(animate);
+}
+
+function finishRotation(indices, clockwise) {
+  const map = clockwise ? [2, 0, 3, 1] : [1, 3, 0, 2];
+  // permute UNIQUEMENT les contenus .big (bigOrder)
+  const saved = indices.map(i => bigOrder[i]);
+  for (let i = 0; i < 4; i++) bigOrder[indices[map[i]]] = saved[i];
+  render();
+  isLocalRotating = false;
+}
+
+function attemptRotation(x, y, dx, dy) {
+  if (isLocalRotating) return false;
+  const dir = detectDiag(dx, dy);
+  if (!dir) return false;
+  const group = getGroup(x, y, dir);
+  if (!group) return false;
+  executeRotation(group, isClockwise(dir));
+  return true;
+}
+
+function handleStart(e) {
+  const touch = e.touches?.[0] || e;
+  const target = e.target.closest('.stage');
+  if (!target) return;
+  const idx = parseInt(target.dataset.index);
+  const pos = getPos(idx);
+  dragState = { x: pos.x, y: pos.y, sx: touch.clientX, sy: touch.clientY, moved: false };
+  e.preventDefault();
+}
+
+function handleMove(e) {
+  if (!dragState || dragState.moved) return;
+  const touch = e.touches?.[0] || e;
+  const dx = touch.clientX - dragState.sx, dy = touch.clientY - dragState.sy;
+  if (detectDiag(dx, dy)) {
+    dragState.moved = true;
+    attemptRotation(dragState.x, dragState.y, dx, dy);
+  }
+  e.preventDefault();
+}
+
+function handleEnd() {
+  dragState = null;
+}
+
+grid.addEventListener('mousedown', handleStart);
+grid.addEventListener('touchstart', handleStart, { passive: false });
+document.addEventListener('mousemove', handleMove);
+document.addEventListener('touchmove', handleMove, { passive: false });
+document.addEventListener('mouseup', handleEnd);
+document.addEventListener('touchend', handleEnd);
+</script>
 </body>
 </html>
